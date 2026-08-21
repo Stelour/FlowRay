@@ -9,15 +9,19 @@ void find_socket_inodes(
     std::vector<std::string>& socket_list,
     std::unordered_set<std::uint32_t>& socket_inodes) {
     for (const auto& entry : std::filesystem::directory_iterator(dir_path + "/fd")) {
-        std::string cur_fd = std::filesystem::read_symlink(entry.path());
-        if (cur_fd.substr(0, 7) == "socket:") {
+        std::error_code ec;
+        std::string cur_fd = std::filesystem::read_symlink(entry.path(), ec);
+        if (ec) {
+            continue;
+        }
+        if (cur_fd.starts_with("socket:[")) {
             socket_list.push_back(cur_fd);
             socket_inodes.insert(std::stoul(cur_fd.substr(8, cur_fd.length() - 8)));
         }
     }
 }
 
-void get_process_info(const ProcessInfo& proc_info) {
+void print_process_info(const ProcessInfo& proc_info) {
     std::cout << "PID: " << proc_info.pid << std::endl;
     std::cout << "Process name: " << proc_info.name << std::endl;
     std::cout << std::endl;
@@ -44,7 +48,7 @@ ErrorCode start_pid(int pid) {
     find_socket_inodes(dir_path, socket_list, socket_inodes);
 
     ProcessInfo proc_info = {pid, process_name, dir_path, socket_list, socket_inodes};
-    get_process_info(proc_info);
+    print_process_info(proc_info);
 
     return ErrorCode::success;
 }
