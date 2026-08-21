@@ -12,6 +12,12 @@ enum class ErrorCode {
     file_not_found
 };
 
+struct ProcessInfo {
+    int pid{};
+    std::string name;
+    std::filesystem::path dir_path;
+};
+
 ErrorCode start_pid(int pid);
 
 #endif //FLOWRAY_MAIN_H
