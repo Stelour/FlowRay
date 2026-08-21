@@ -19,7 +19,6 @@ struct ProcessInfo {
     int pid{};
     std::string name;
     std::filesystem::path dir_path;
-    std::vector<std::string> socket_list;
     std::unordered_set<std::uint32_t> socket_inodes;
 };
 
