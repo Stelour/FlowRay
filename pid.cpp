@@ -14,7 +14,8 @@ void find_socket_inodes(
             continue;
         }
         if (cur_fd.starts_with("socket:[")) {
-            socket_inodes.insert(std::stoul(cur_fd.substr(8, cur_fd.length() - 8)));
+            socket_inodes.insert(std::stoul(
+                cur_fd.substr(cur_fd.find('[') + 1, cur_fd.find(']') - cur_fd.find('[') - 1)));
         }
     }
 }
