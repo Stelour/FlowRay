@@ -9,4 +9,5 @@ project(
 set(CMAKE_CXX_STANDARD 20)
 
 add_executable(flowray main.cpp
-        pid.cpp)
+        pid.cpp
+        main.h)
