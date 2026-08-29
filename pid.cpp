@@ -30,12 +30,12 @@ void print_process_info(const ProcessInfo& proc_info) {
     }
 }
 
-ErrorCode start_pid(int pid) {
+status_msg start_pid(int pid) {
     std::string str_pid = std::to_string(pid);
     std::string dir_path = "/proc/" + str_pid;
     if (check_pid_is_correct(dir_path) == false) {
         std::cerr << "ERROR: incorrect PID" << std::endl;
-        return ErrorCode::incorrect_pid;
+        return status_msg::error;
     }
 
     std::ifstream file_pid_comm(dir_path + "/comm");
@@ -48,5 +48,11 @@ ErrorCode start_pid(int pid) {
     ProcessInfo proc_info = {pid, process_name, dir_path, socket_inodes};
     print_process_info(proc_info);
 
-    return ErrorCode::success;
+    // req to socket
+    status_msg socket_req_ans = socket_req();
+    if (socket_req_ans != status_msg::success) {
+        return socket_req_ans;
+    }
+
+    return status_msg::success;
 }

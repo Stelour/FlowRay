@@ -9,10 +9,9 @@
 #include <vector>
 #include <unordered_set>
 
-enum class ErrorCode {
+enum class status_msg {
     success,
-    incorrect_pid,
-    file_not_found
+    error
 };
 
 struct ProcessInfo {
@@ -22,6 +21,7 @@ struct ProcessInfo {
     std::unordered_set<std::uint32_t> socket_inodes;
 };
 
-ErrorCode start_pid(int pid);
+status_msg start_pid(int pid);
+status_msg socket_req();
 
 #endif //FLOWRAY_MAIN_H
