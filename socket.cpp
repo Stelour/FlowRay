@@ -41,15 +41,35 @@ static int send_req(int fd) {
     }
 }
 
+static int print_diag(const struct inet_diag_msg *diag, unsigned int size) {
+    // diag->idiag_family
+    // diag->idiag_state
+    // diag->id.idiag_sport
+    // diag->id.idiag_dport
+    // diag->id.idiag_src
+    // diag->id.idiag_dst
+    // diag->idiag_uid
+    // diag->idiag_inode
+
+    if (size < NLMSG_LENGTH(sizeof(*diag))) {
+        std::cerr << "short response" << std::endl;
+        return -1;
+    }
+
+    if (diag->idiag_family != AF_INET) {
+        std::cerr << "unexpected family" << std::endl;
+        return -1;
+    }
+
+    std::cout << "inode=" << diag->idiag_inode;
+    std::cout << " uid=" << diag->idiag_uid;
+    std::cout << " state=" << static_cast<unsigned>(diag->idiag_state) << std::endl;
+
+    return 0;
+}
+
 static int receive_response(int fd) {
     alignas(nlmsghdr) char buffer[8192]{}; // todo
-
-    // struct sockaddr_nl {
-    //     sa_family_t     nl_family;  /* AF_NETLINK */
-    //     unsigned short  nl_pad;     /* Zero */
-    //     pid_t           nl_pid;     /* Port ID */
-    //     __u32           nl_groups;  /* Multicast groups mask */
-    // };
 
     sockaddr_nl nladdr{};
 
@@ -97,6 +117,29 @@ static int receive_response(int fd) {
         // << "nlmsg_type: " << h->nlmsg_type << '\n'
         // << "nlmsg_flags: " << h->nlmsg_flags << '\n';
         // return 0;
+
+        for (; NLMSG_OK(h, ret); h = NLMSG_NEXT(h, ret)) {
+            if (h->nlmsg_type == NLMSG_DONE) {
+                return 0;
+            }
+            if (h->nlmsg_type == NLMSG_ERROR) {
+                if (h->nlmsg_len < NLMSG_LENGTH(sizeof(nlmsgerr))) {
+                    std::cerr << "NLMSG_ERROR\n";
+                    return -1;
+                }
+                const auto *err = static_cast<const nlmsgerr *>(NLMSG_DATA(h));
+                errno = -err->error;
+                std::perror("NLMSG_ERROR");
+                return -1;
+            }
+            if (h->nlmsg_type != SOCK_DIAG_BY_FAMILY) {
+                std::cerr << "unexpected type\n";
+                return -1;
+            }
+            if (print_diag(static_cast<const struct inet_diag_msg*>(NLMSG_DATA(h)), h->nlmsg_len)) {
+                return -1;
+            }
+        }
 
     }
 }
