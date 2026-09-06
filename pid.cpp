@@ -102,11 +102,35 @@ status_msg start_pid(int pid) {
         .family = AF_INET,
         .protocol = IPPROTO_TCP
     };
+    DiagQuery ipv4_udp {
+        .family = AF_INET,
+        .protocol = IPPROTO_UDP
+    };
+    DiagQuery ipv6_tcp {
+        .family = AF_INET6,
+        .protocol = IPPROTO_TCP
+    };
+    DiagQuery ipv6_udp {
+        .family = AF_INET6,
+        .protocol = IPPROTO_UDP
+    };
 
     std::vector<SocketInfo> sockets;
-    status_msg socket_req_ans = socket_req(proc_info.socket_inodes, sockets, ipv4_tcp);
-    if (socket_req_ans != status_msg::success) {
-        return socket_req_ans;
+    status_msg socket_req_ans1 = socket_req(proc_info.socket_inodes, sockets, ipv4_tcp);
+    if (socket_req_ans1 != status_msg::success) {
+        return socket_req_ans1;
+    }
+    status_msg socket_req_ans2 = socket_req(proc_info.socket_inodes, sockets, ipv4_udp);
+    if (socket_req_ans2 != status_msg::success) {
+        return socket_req_ans2;
+    }
+    status_msg socket_req_ans3 = socket_req(proc_info.socket_inodes, sockets, ipv6_tcp);
+    if (socket_req_ans3 != status_msg::success) {
+        return socket_req_ans3;
+    }
+    status_msg socket_req_ans4 = socket_req(proc_info.socket_inodes, sockets, ipv6_udp);
+    if (socket_req_ans4 != status_msg::success) {
+        return socket_req_ans4;
     }
 
     print_socket_info(sockets);

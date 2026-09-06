@@ -41,7 +41,9 @@ static int send_req(int fd, DiagQuery socket_diag_query) {
     }
 }
 
-static SocketInfo parse_diag(const struct inet_diag_msg *diag, DiagQuery socket_diag_query) {
+static SocketInfo parse_diag(const inet_diag_msg *diag, DiagQuery socket_diag_query) {
+    SocketInfo socket{};
+
     // diag->idiag_family
     // diag->idiag_state
     // diag->id.idiag_sport
@@ -51,37 +53,35 @@ static SocketInfo parse_diag(const struct inet_diag_msg *diag, DiagQuery socket_
     // diag->idiag_uid
     // diag->idiag_inode
 
-    SocketInfo socket{};
-
     socket.inode = diag->idiag_inode;
     socket.uid = diag->idiag_uid;
     socket.state = diag->idiag_state;
 
+    socket.family = diag->idiag_family;
+    socket.protocol = socket_diag_query.protocol;
+
     socket.local_port = ntohs(diag->id.idiag_sport);
     socket.remote_port = ntohs(diag->id.idiag_dport);
 
-    char local_ip[INET_ADDRSTRLEN]{};
-    char remote_ip[INET_ADDRSTRLEN]{};
+    char local_ip[INET6_ADDRSTRLEN]{};
+    char remote_ip[INET6_ADDRSTRLEN]{};
 
     inet_ntop(
-        AF_INET,
-        &diag->id.idiag_src[0],
+        diag->idiag_family,
+        diag->id.idiag_src,
         local_ip,
         sizeof(local_ip)
     );
 
     inet_ntop(
-        AF_INET,
-        &diag->id.idiag_dst[0],
+        diag->idiag_family,
+        diag->id.idiag_dst,
         remote_ip,
         sizeof(remote_ip)
     );
 
     socket.local_ip = local_ip;
     socket.remote_ip = remote_ip;
-
-    socket.family = diag->idiag_family;
-    socket.protocol = IPPROTO_TCP;
 
     return socket;
 }
