@@ -1,7 +1,7 @@
 #include "main.h"
 #include "socket.h"
 
-static int send_req(int fd) {
+static int send_req(int fd, DiagQuery socket_diag_query) {
     // send to Linux kernel.
     sockaddr_nl kernel_addr{};
     kernel_addr.nl_family = AF_NETLINK;
@@ -13,8 +13,8 @@ static int send_req(int fd) {
     req.nlh.nlmsg_len = sizeof(req);
     req.nlh.nlmsg_type = SOCK_DIAG_BY_FAMILY;
     req.nlh.nlmsg_flags = NLM_F_REQUEST | NLM_F_DUMP;
-    req.req.sdiag_family = AF_INET;
-    req.req.sdiag_protocol = IPPROTO_TCP;
+    req.req.sdiag_family = socket_diag_query.family;
+    req.req.sdiag_protocol = socket_diag_query.protocol;
     req.req.idiag_states = 0xFFFFFFFF;
 
     // buffer of msg
@@ -41,7 +41,7 @@ static int send_req(int fd) {
     }
 }
 
-static SocketInfo parse_diag(const struct inet_diag_msg *diag) {
+static SocketInfo parse_diag(const struct inet_diag_msg *diag, DiagQuery socket_diag_query) {
     // diag->idiag_family
     // diag->idiag_state
     // diag->id.idiag_sport
@@ -80,12 +80,16 @@ static SocketInfo parse_diag(const struct inet_diag_msg *diag) {
     socket.local_ip = local_ip;
     socket.remote_ip = remote_ip;
 
+    socket.family = diag->idiag_family;
+    socket.protocol = IPPROTO_TCP;
+
     return socket;
 }
 
 static int receive_response(int fd,
     const std::unordered_set<std::uint32_t>& target_inodes,
-    std::vector<SocketInfo>& sockets) {
+    std::vector<SocketInfo>& sockets,
+    DiagQuery socket_diag_query) {
 
     alignas(nlmsghdr) char buffer[8192]{}; // todo
 
@@ -167,24 +171,27 @@ static int receive_response(int fd,
             if (!target_inodes.contains(diag->idiag_inode)) {
                 continue;
             }
-            sockets.push_back(parse_diag(diag));
+            sockets.push_back(parse_diag(diag, socket_diag_query));
         }
 
     }
 }
 
-status_msg socket_req(const std::unordered_set<std::uint32_t>& target_inodes, std::vector<SocketInfo>& sockets) {
+status_msg socket_req(
+    const std::unordered_set<std::uint32_t>& target_inodes,
+    std::vector<SocketInfo>& sockets,
+    DiagQuery socket_diag_query) {
     int fd = socket(AF_NETLINK, SOCK_RAW, NETLINK_SOCK_DIAG);
     if (fd < 0) {
         std::perror("ERROR: failed to create sock_diag socket");
         return status_msg::error;
     }
     // std::cout << "sock_diag fd: " << fd << '\n';
-    if (send_req(fd) != 0) {
+    if (send_req(fd, socket_diag_query) != 0) {
         close(fd);
         return status_msg::error;
     }
-    if (receive_response(fd, target_inodes, sockets) != 0) {
+    if (receive_response(fd, target_inodes, sockets, socket_diag_query) != 0) {
         close(fd);
         return status_msg::error;
     }
