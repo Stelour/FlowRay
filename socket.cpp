@@ -142,10 +142,13 @@ static int receive_response(int fd,
             }
             if (h->nlmsg_type == NLMSG_ERROR) {
                 if (h->nlmsg_len < NLMSG_LENGTH(sizeof(nlmsgerr))) {
-                    std::cerr << "NLMSG_ERROR\n";
+                    std::cerr << "NLMSG_ERROR" << std::endl;
                     return -1;
                 }
                 const auto *err = static_cast<const nlmsgerr *>(NLMSG_DATA(h));
+                if (err->error == 0) {
+                    continue;
+                }
                 errno = -err->error;
                 std::perror("NLMSG_ERROR");
                 return -1;
@@ -153,6 +156,11 @@ static int receive_response(int fd,
             if (h->nlmsg_type != SOCK_DIAG_BY_FAMILY) {
                 std::cerr << "unexpected type" << std::endl;
                 return -1;
+            }
+
+            if (h->nlmsg_len < NLMSG_LENGTH(sizeof(inet_diag_msg))) {
+                std::cerr << "Invalid inet_diag message length\n";
+                continue;
             }
 
             const auto* diag = static_cast<const struct inet_diag_msg*>(NLMSG_DATA(h));
