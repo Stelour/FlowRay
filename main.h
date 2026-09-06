@@ -21,7 +21,19 @@ struct ProcessInfo {
     std::unordered_set<std::uint32_t> socket_inodes;
 };
 
+struct SocketInfo {
+    std::uint32_t inode{};
+    std::uint32_t uid{};
+    std::uint8_t state{};
+
+    std::string local_ip;
+    std::uint16_t local_port{};
+
+    std::string remote_ip;
+    std::uint16_t remote_port{};
+};
+
 status_msg start_pid(int pid);
-status_msg socket_req();
+status_msg socket_req(const std::unordered_set<std::uint32_t>& target_inodes, std::vector<SocketInfo>& sockets);
 
 #endif //FLOWRAY_MAIN_H

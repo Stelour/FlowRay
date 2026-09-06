@@ -1,10 +1,10 @@
 #include "main.h"
 
-bool check_pid_is_correct(const std::string& dir_path) {
+static bool check_pid_is_correct(const std::string& dir_path) {
     return std::filesystem::is_directory(dir_path);
 }
 
-void find_socket_inodes(
+static void find_socket_inodes(
     const std::string& dir_path,
     std::unordered_set<std::uint32_t>& socket_inodes) {
     for (const auto& entry : std::filesystem::directory_iterator(dir_path + "/fd")) {
@@ -20,13 +20,23 @@ void find_socket_inodes(
     }
 }
 
-void print_process_info(const ProcessInfo& proc_info) {
+static void print_process_info(const ProcessInfo& proc_info) {
     std::cout << "PID: " << proc_info.pid << std::endl;
     std::cout << "Process name: " << proc_info.name << std::endl;
     std::cout << std::endl;
-    std::cout << "Socket inodes:" << std::endl;
-    for (const std::uint32_t& s : proc_info.socket_inodes) {
-        std::cout << s << std::endl;
+    // std::cout << "Socket inodes:" << std::endl;
+    // for (const std::uint32_t& s : proc_info.socket_inodes) {
+    //     std::cout << s << std::endl;
+    // }
+}
+
+static void print_socket_info(const std::vector<SocketInfo>& sockets) {
+    std::cout << "Sockets:" << std::endl;
+
+    for (const auto& socket : sockets) {
+        std::cout << "inode: " << socket.inode << '\t' << "uid: " << socket.uid
+        << '\t' << "state: " << static_cast<unsigned>(socket.state) << '\t' << socket.local_ip << ':'
+        << socket.local_port << " -> " << socket.remote_ip << ':' << socket.remote_port << std::endl;
     }
 }
 
@@ -49,10 +59,13 @@ status_msg start_pid(int pid) {
     print_process_info(proc_info);
 
     // req to socket
-    status_msg socket_req_ans = socket_req();
+    std::vector<SocketInfo> sockets;
+    status_msg socket_req_ans = socket_req(proc_info.socket_inodes, sockets);
     if (socket_req_ans != status_msg::success) {
         return socket_req_ans;
     }
+
+    print_socket_info(sockets);
 
     return status_msg::success;
 }

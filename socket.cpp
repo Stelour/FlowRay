@@ -41,7 +41,7 @@ static int send_req(int fd) {
     }
 }
 
-static int print_diag(const struct inet_diag_msg *diag, unsigned int size) {
+static SocketInfo parse_diag(const struct inet_diag_msg *diag) {
     // diag->idiag_family
     // diag->idiag_state
     // diag->id.idiag_sport
@@ -51,24 +51,42 @@ static int print_diag(const struct inet_diag_msg *diag, unsigned int size) {
     // diag->idiag_uid
     // diag->idiag_inode
 
-    if (size < NLMSG_LENGTH(sizeof(*diag))) {
-        std::cerr << "short response" << std::endl;
-        return -1;
-    }
+    SocketInfo socket{};
 
-    if (diag->idiag_family != AF_INET) {
-        std::cerr << "unexpected family" << std::endl;
-        return -1;
-    }
+    socket.inode = diag->idiag_inode;
+    socket.uid = diag->idiag_uid;
+    socket.state = diag->idiag_state;
 
-    std::cout << "inode=" << diag->idiag_inode;
-    std::cout << " uid=" << diag->idiag_uid;
-    std::cout << " state=" << static_cast<unsigned>(diag->idiag_state) << std::endl;
+    socket.local_port = ntohs(diag->id.idiag_sport);
+    socket.remote_port = ntohs(diag->id.idiag_dport);
 
-    return 0;
+    char local_ip[INET_ADDRSTRLEN]{};
+    char remote_ip[INET_ADDRSTRLEN]{};
+
+    inet_ntop(
+        AF_INET,
+        &diag->id.idiag_src[0],
+        local_ip,
+        sizeof(local_ip)
+    );
+
+    inet_ntop(
+        AF_INET,
+        &diag->id.idiag_dst[0],
+        remote_ip,
+        sizeof(remote_ip)
+    );
+
+    socket.local_ip = local_ip;
+    socket.remote_ip = remote_ip;
+
+    return socket;
 }
 
-static int receive_response(int fd) {
+static int receive_response(int fd,
+    const std::unordered_set<std::uint32_t>& target_inodes,
+    std::vector<SocketInfo>& sockets) {
+
     alignas(nlmsghdr) char buffer[8192]{}; // todo
 
     sockaddr_nl nladdr{};
@@ -133,29 +151,32 @@ static int receive_response(int fd) {
                 return -1;
             }
             if (h->nlmsg_type != SOCK_DIAG_BY_FAMILY) {
-                std::cerr << "unexpected type\n";
+                std::cerr << "unexpected type" << std::endl;
                 return -1;
             }
-            if (print_diag(static_cast<const struct inet_diag_msg*>(NLMSG_DATA(h)), h->nlmsg_len)) {
-                return -1;
+
+            const auto* diag = static_cast<const struct inet_diag_msg*>(NLMSG_DATA(h));
+            if (!target_inodes.contains(diag->idiag_inode)) {
+                continue;
             }
+            sockets.push_back(parse_diag(diag));
         }
 
     }
 }
 
-status_msg socket_req() {
+status_msg socket_req(const std::unordered_set<std::uint32_t>& target_inodes, std::vector<SocketInfo>& sockets) {
     int fd = socket(AF_NETLINK, SOCK_RAW, NETLINK_SOCK_DIAG);
     if (fd < 0) {
         std::perror("ERROR: failed to create sock_diag socket");
         return status_msg::error;
     }
-    std::cout << "sock_diag fd: " << fd << '\n';
-    if (send_req(fd) > 0) {
+    // std::cout << "sock_diag fd: " << fd << '\n';
+    if (send_req(fd) != 0) {
         close(fd);
         return status_msg::error;
     }
-    if (receive_response(fd) > 0) {
+    if (receive_response(fd, target_inodes, sockets) != 0) {
         close(fd);
         return status_msg::error;
     }

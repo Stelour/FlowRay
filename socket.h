@@ -8,6 +8,7 @@
 #include <netinet/in.h>
 #include <unistd.h>
 #include <cerrno>
+#include <arpa/inet.h>
 
 struct DiagRequest {
     nlmsghdr nlh{};
