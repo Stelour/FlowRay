@@ -41,10 +41,11 @@ struct SocketInfo {
     std::uint16_t remote_port{};
 };
 
-status_msg start_pid(int pid);
+status_msg start_pid(int pid, bool need_print_about_proc, bool pid_tree);
 status_msg socket_req(
     const std::unordered_set<std::uint32_t>& target_inodes,
     std::vector<SocketInfo>& sockets,
     DiagQuery socket_diag_query);
+void push_pid_tree(int pid, std::vector<std::uint32_t>& proc_pid);
 
 #endif //FLOWRAY_MAIN_H

@@ -2,7 +2,7 @@
 
 #include "main.h"
 
-static std::string tcp_state_to_string(std::uint8_t state) {
+static std::string state_to_string(std::uint8_t state) {
     switch (state) {
         case 1: return "ESTABLISHED";
         case 2: return "SYN_SENT";
@@ -76,11 +76,11 @@ static void print_socket_info(const std::vector<SocketInfo>& sockets) {
         << family_to_string(socket.family) << '\t'
         << socket.local_ip << ':' << socket.local_port << " -> "
         << socket.remote_ip << ':' << socket.remote_port
-        << '\t' << tcp_state_to_string(socket.state) << std::endl;
+        << '\t' << state_to_string(socket.state) << std::endl;
     }
 }
 
-status_msg start_pid(int pid) {
+status_msg start_pid(int pid, bool need_print_about_proc, bool pid_tree) {
     std::string str_pid = std::to_string(pid);
     std::string dir_path = "/proc/" + str_pid;
     if (check_pid_is_correct(dir_path) == false) {
@@ -92,11 +92,18 @@ status_msg start_pid(int pid) {
     std::string process_name;
     std::getline(file_pid_comm, process_name);
 
+    std::vector<std::uint32_t> procs_pid;
+    procs_pid.push_back(pid);
+    if (pid_tree == true) {
+        push_pid_tree(pid, procs_pid);
+    }
+
     std::unordered_set<std::uint32_t> socket_inodes = {};
-    find_socket_inodes(dir_path, socket_inodes);
+    for (auto& proc_pid : procs_pid) {
+        find_socket_inodes("/proc/" + std::to_string(proc_pid), socket_inodes);
+    }
 
     ProcessInfo proc_info = {pid, process_name, dir_path, socket_inodes};
-    print_process_info(proc_info);
 
     // req to socket
     DiagQuery ipv4_tcp {
@@ -134,7 +141,10 @@ status_msg start_pid(int pid) {
         return socket_req_ans4;
     }
 
-    print_socket_info(sockets);
+    if (need_print_about_proc == true) {
+        print_process_info(proc_info);
+        print_socket_info(sockets);
+    }
 
     return status_msg::success;
 }
