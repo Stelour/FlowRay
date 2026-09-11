@@ -1,4 +1,4 @@
-# FlowRay
+# FlowRay v0.1
 
 FlowRay is a Linux networking tool for inspecting network activity of a specific process.
 
@@ -9,8 +9,6 @@ FlowRay is a Linux networking tool for inspecting network activity of a specific
 ### 1: --pid
 
 Analyzes sockets belonging to the specified process.
-
-FlowRay finds socket inodes through /proc/<PID>/fd, queries socket information from the kernel using NETLINK_SOCK_DIAG, and matches the results back to the process.
 
 Example:
 ```
