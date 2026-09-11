@@ -42,7 +42,8 @@ static bool check_pid_is_correct(const std::string& dir_path) {
 
 static void find_socket_inodes(
     const std::string& dir_path,
-    std::unordered_set<std::uint32_t>& socket_inodes) {
+    std::unordered_map<std::uint32_t, std::vector<std::uint32_t>>& socket_inodes,
+    std::uint32_t proc_pid) {
     for (const auto& entry : std::filesystem::directory_iterator(dir_path + "/fd")) {
         std::error_code ec;
         std::string cur_fd = std::filesystem::read_symlink(entry.path(), ec);
@@ -50,8 +51,11 @@ static void find_socket_inodes(
             continue;
         }
         if (cur_fd.starts_with("socket:[")) {
-            socket_inodes.insert(std::stoul(
-                cur_fd.substr(cur_fd.find('[') + 1, cur_fd.find(']') - cur_fd.find('[') - 1)));
+            // socket_inodes.insert(std::stoul(
+            //     cur_fd.substr(cur_fd.find('[') + 1, cur_fd.find(']') - cur_fd.find('[') - 1)));
+            socket_inodes[
+                std::stoul(cur_fd.substr(cur_fd.find('[') + 1, cur_fd.find(']') - cur_fd.find('[') - 1))
+                ].push_back(proc_pid);
         }
     }
 }
@@ -66,8 +70,7 @@ static void print_process_info(const ProcessInfo& proc_info) {
     // }
 }
 
-static void print_socket_info(const std::vector<SocketInfo>& sockets) {
-    // todo: отдельный префикс для --pid чтобы выводить подробную информацию о каждом сокете
+static void print_socket_info(const std::vector<SocketInfo>& sockets, bool detail) {
     std::cout << "Sockets:" << std::endl;
 
     for (const auto& socket : sockets) {
@@ -77,10 +80,18 @@ static void print_socket_info(const std::vector<SocketInfo>& sockets) {
         << socket.local_ip << ':' << socket.local_port << " -> "
         << socket.remote_ip << ':' << socket.remote_port
         << '\t' << state_to_string(socket.state) << std::endl;
+        if (detail) {
+            std::cout << "\tPID: ";
+            for (const auto pid : socket.pids) {
+                std::cout << pid << ' ';
+            }
+            std::cout << std::endl;
+            std::cout << "\tinode: " << socket.inode << std::endl;
+        }
     }
 }
 
-status_msg start_pid(int pid, bool need_print_about_proc, bool pid_tree) {
+status_msg start_pid(int pid, bool need_print_about_proc, bool pid_tree, bool pid_detail) {
     std::string str_pid = std::to_string(pid);
     std::string dir_path = "/proc/" + str_pid;
     if (check_pid_is_correct(dir_path) == false) {
@@ -98,9 +109,10 @@ status_msg start_pid(int pid, bool need_print_about_proc, bool pid_tree) {
         push_pid_tree(pid, procs_pid);
     }
 
-    std::unordered_set<std::uint32_t> socket_inodes = {};
+    // std::unordered_set<std::uint32_t> socket_inodes = {};
+    std::unordered_map<std::uint32_t, std::vector<std::uint32_t>> socket_inodes;
     for (auto& proc_pid : procs_pid) {
-        find_socket_inodes("/proc/" + std::to_string(proc_pid), socket_inodes);
+        find_socket_inodes("/proc/" + std::to_string(proc_pid), socket_inodes, proc_pid);
     }
 
     ProcessInfo proc_info = {pid, process_name, dir_path, socket_inodes};
@@ -143,7 +155,7 @@ status_msg start_pid(int pid, bool need_print_about_proc, bool pid_tree) {
 
     if (need_print_about_proc == true) {
         print_process_info(proc_info);
-        print_socket_info(sockets);
+        print_socket_info(sockets, pid_detail);
     }
 
     return status_msg::success;

@@ -18,7 +18,7 @@ struct ProcessInfo {
     int pid{};
     std::string name;
     std::filesystem::path dir_path;
-    std::unordered_set<std::uint32_t> socket_inodes;
+    std::unordered_map<std::uint32_t, std::vector<std::uint32_t>>& socket_inodes;
 };
 
 struct DiagQuery {
@@ -30,6 +30,7 @@ struct SocketInfo {
     std::uint8_t family{};
     std::uint8_t protocol{};
 
+    std::vector<std::uint32_t> pids{};
     std::uint32_t inode{};
     std::uint32_t uid{};
     std::uint8_t state{};
@@ -41,9 +42,9 @@ struct SocketInfo {
     std::uint16_t remote_port{};
 };
 
-status_msg start_pid(int pid, bool need_print_about_proc, bool pid_tree);
+status_msg start_pid(int pid, bool need_print_about_proc, bool pid_tree, bool pid_detail);
 status_msg socket_req(
-    const std::unordered_set<std::uint32_t>& target_inodes,
+    const std::unordered_map<std::uint32_t, std::vector<std::uint32_t>>& target_inodes,
     std::vector<SocketInfo>& sockets,
     DiagQuery socket_diag_query);
 void push_pid_tree(int pid, std::vector<std::uint32_t>& proc_pid);

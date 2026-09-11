@@ -41,7 +41,7 @@ static int send_req(int fd, DiagQuery socket_diag_query) {
     }
 }
 
-static SocketInfo parse_diag(const inet_diag_msg *diag, DiagQuery socket_diag_query) {
+static SocketInfo parse_diag(const inet_diag_msg *diag, DiagQuery socket_diag_query, const std::vector<std::uint32_t>& pids) {
     SocketInfo socket{};
 
     // diag->idiag_family
@@ -53,6 +53,7 @@ static SocketInfo parse_diag(const inet_diag_msg *diag, DiagQuery socket_diag_qu
     // diag->idiag_uid
     // diag->idiag_inode
 
+    socket.pids = pids;
     socket.inode = diag->idiag_inode;
     socket.uid = diag->idiag_uid;
     socket.state = diag->idiag_state;
@@ -87,7 +88,7 @@ static SocketInfo parse_diag(const inet_diag_msg *diag, DiagQuery socket_diag_qu
 }
 
 static int receive_response(int fd,
-    const std::unordered_set<std::uint32_t>& target_inodes,
+    const std::unordered_map<std::uint32_t, std::vector<std::uint32_t>>& target_inodes,
     std::vector<SocketInfo>& sockets,
     DiagQuery socket_diag_query) {
 
@@ -168,17 +169,17 @@ static int receive_response(int fd,
             }
 
             const auto* diag = static_cast<const struct inet_diag_msg*>(NLMSG_DATA(h));
-            if (!target_inodes.contains(diag->idiag_inode)) {
+            if (target_inodes.find(diag->idiag_inode) == target_inodes.end()) {
                 continue;
             }
-            sockets.push_back(parse_diag(diag, socket_diag_query));
+            sockets.push_back(parse_diag(diag, socket_diag_query, target_inodes.find(diag->idiag_inode)->second));
         }
 
     }
 }
 
 status_msg socket_req(
-    const std::unordered_set<std::uint32_t>& target_inodes,
+    const std::unordered_map<std::uint32_t, std::vector<std::uint32_t>>& target_inodes,
     std::vector<SocketInfo>& sockets,
     DiagQuery socket_diag_query) {
     int fd = socket(AF_NETLINK, SOCK_RAW, NETLINK_SOCK_DIAG);
