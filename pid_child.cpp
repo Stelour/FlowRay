@@ -44,7 +44,7 @@ void push_pid_tree(int pid, std::vector<std::uint32_t>& proc_pid) {
             std::string folder_name = entry.path().filename().string();
             if (is_number(folder_name)) {
                 auto pid_child = static_cast<uint32_t>(std::stoul(folder_name));
-                const auto ppid = get_ppid_proc(child_pid);
+                const auto ppid = get_ppid_proc(pid_child);
                 if (ppid == 0) {
                     continue;
                 }
