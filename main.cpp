@@ -13,7 +13,10 @@ int main(int argc, char* argv[]) {
     CLI11_PARSE(app, argc, argv);
 
     if (*op_pid) {
-        start_pid(pid, true, pid_tree, pid_detail);
+        if (start_pid(pid, true, pid_tree, pid_detail) != status_msg::success) {
+            std::cerr << "ERROR: failed to start process pid " << std::endl;
+            return -1;
+        }
     }
     return 0;
 }

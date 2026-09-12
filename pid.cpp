@@ -142,19 +142,23 @@ status_msg start_pid(int pid, bool need_print_about_proc, bool pid_tree, bool pi
     std::vector<SocketInfo> sockets;
     status_msg socket_req_ans1 = socket_req(proc_info.socket_inodes, sockets, ipv4_tcp);
     if (socket_req_ans1 != status_msg::success) {
-        return socket_req_ans1;
+        std::cerr << "ERROR: socket_req_ans1 (ipv4_tcp) failed" << std::endl;
+        return status_msg::error;
     }
     status_msg socket_req_ans2 = socket_req(proc_info.socket_inodes, sockets, ipv4_udp);
     if (socket_req_ans2 != status_msg::success) {
-        return socket_req_ans2;
+        std::cerr << "ERROR: socket_req_ans2 (ipv4_udp) failed" << std::endl;
+        return status_msg::error;
     }
     status_msg socket_req_ans3 = socket_req(proc_info.socket_inodes, sockets, ipv6_tcp);
     if (socket_req_ans3 != status_msg::success) {
-        return socket_req_ans3;
+        std::cerr << "ERROR: socket_req_ans3 (ipv6_tcp) failed" << std::endl;
+        return status_msg::error;
     }
     status_msg socket_req_ans4 = socket_req(proc_info.socket_inodes, sockets, ipv6_udp);
     if (socket_req_ans4 != status_msg::success) {
-        return socket_req_ans4;
+        std::cerr << "ERROR: socket_req_ans4 (ipv6_udp) failed" << std::endl;
+        return status_msg::error;
     }
 
     if (need_print_about_proc == true) {
