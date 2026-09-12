@@ -41,7 +41,7 @@ static int send_req(int fd, DiagQuery socket_diag_query) {
     }
 }
 
-static SocketInfo parse_diag(const inet_diag_msg *diag, DiagQuery socket_diag_query, const std::vector<std::uint32_t>& pids) {
+static SocketInfo parse_diag(const inet_diag_msg *diag, DiagQuery socket_diag_query, const std::set<std::uint32_t>& pids) {
     SocketInfo socket{};
 
     // diag->idiag_family
@@ -88,7 +88,7 @@ static SocketInfo parse_diag(const inet_diag_msg *diag, DiagQuery socket_diag_qu
 }
 
 static int receive_response(int fd,
-    const std::unordered_map<std::uint32_t, std::vector<std::uint32_t>>& target_inodes,
+    const std::unordered_map<std::uint32_t, std::set<std::uint32_t>>& target_inodes,
     std::vector<SocketInfo>& sockets,
     DiagQuery socket_diag_query) {
 
@@ -179,7 +179,7 @@ static int receive_response(int fd,
 }
 
 status_msg socket_req(
-    const std::unordered_map<std::uint32_t, std::vector<std::uint32_t>>& target_inodes,
+    const std::unordered_map<std::uint32_t, std::set<std::uint32_t>>& target_inodes,
     std::vector<SocketInfo>& sockets,
     DiagQuery socket_diag_query) {
     int fd = socket(AF_NETLINK, SOCK_RAW, NETLINK_SOCK_DIAG);
