@@ -1,18 +1,13 @@
 #ifndef FLOWRAY_SOCKET_H
 #define FLOWRAY_SOCKET_H
 
-#include <sys/socket.h>
-#include <linux/netlink.h>
-#include <linux/sock_diag.h>
-#include <linux/inet_diag.h> // for IPv4 and IPv6 sockets
-#include <netinet/in.h>
-#include <unistd.h>
-#include <cerrno>
-#include <arpa/inet.h>
+#include "data.h"
 
-struct DiagRequest {
-    nlmsghdr nlh{};
-    inet_diag_req_v2 req{};
-};
+#include <vector>
+
+status_msg socket_req(
+    const std::unordered_map<std::uint32_t, std::set<std::uint32_t>>& target_inodes,
+    std::vector<SocketInfo>& sockets,
+    DiagQuery socket_diag_query);
 
 #endif //FLOWRAY_SOCKET_H

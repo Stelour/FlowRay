@@ -1,5 +1,20 @@
-#include "main.h"
 #include "socket.h"
+
+#include <arpa/inet.h>
+#include <cerrno>
+#include <iostream>
+#include <linux/inet_diag.h>
+#include <linux/netlink.h>
+#include <linux/sock_diag.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <unistd.h>
+#include <vector>
+
+struct DiagRequest {
+    nlmsghdr nlh{};
+    inet_diag_req_v2 req{};
+};
 
 static int send_req(int fd, DiagQuery socket_diag_query) {
     // send to Linux kernel.

@@ -14,4 +14,8 @@ add_executable(flowray main.cpp
         socket.cpp
         socket.h
         pid_child.cpp
+        output.cpp
+        pid.h
+        output.h
+        data.h
 )
