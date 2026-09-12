@@ -78,8 +78,12 @@ static void print_socket_info(const std::vector<SocketInfo>& sockets, bool detai
         << protocol_to_string(socket.protocol) << '\t'
         << family_to_string(socket.family) << '\t'
         << socket.local_ip << ':' << socket.local_port << " -> "
-        << socket.remote_ip << ':' << socket.remote_port
-        << '\t' << state_to_string(socket.state) << std::endl;
+        << socket.remote_ip << ':' << socket.remote_port;
+        if (protocol_to_string(socket.protocol) == "TCP") {
+            std::cout << '\t' << state_to_string(socket.state) << std::endl;
+        } else {
+            std::cout << std::endl;
+        }
         if (detail) {
             std::cout << "\tPID: ";
             for (const auto pid : socket.pids) {
