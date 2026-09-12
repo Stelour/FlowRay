@@ -92,16 +92,32 @@ static int receive_response(int fd,
     std::vector<SocketInfo>& sockets,
     DiagQuery socket_diag_query) {
 
-    alignas(nlmsghdr) char buffer[8192]{}; // todo
-
-    sockaddr_nl nladdr{};
-
-    struct iovec iov = {
-        .iov_base = buffer,
-        .iov_len = sizeof(buffer)
-    };
-
+    // alignas(nlmsghdr) char buffer[8192]{};
+    std::vector<char> buffer;
     for (;;) {
+        ssize_t msg_size;
+        do {
+            msg_size = recv(fd, nullptr, 0, MSG_PEEK | MSG_TRUNC);
+        } while (msg_size < 0 && errno == EINTR);
+
+        if (msg_size < 0) {
+            std::cerr << "recv MSG_PEEK" << std::endl;
+            return -1;
+        }
+
+        if (msg_size == 0) {
+            return 0;
+        }
+
+        buffer.resize(static_cast<std::size_t>(msg_size));
+
+        sockaddr_nl nladdr{};
+
+        struct iovec iov = {
+            .iov_base = buffer.data(),
+            .iov_len = buffer.size()
+        };
+
         struct msghdr msg = {
             .msg_name = &nladdr,
             .msg_namelen = sizeof(nladdr),
@@ -127,7 +143,7 @@ static int receive_response(int fd,
             return -1;
         }
 
-        const struct nlmsghdr *h = (struct nlmsghdr *) buffer;
+        const auto *h = reinterpret_cast<const nlmsghdr*>(buffer.data());
         if (!NLMSG_OK(h, ret)) {
             std::cerr << "!NLMSG_OK" << std::endl;
             return -1;
@@ -169,10 +185,11 @@ static int receive_response(int fd,
             }
 
             const auto* diag = static_cast<const struct inet_diag_msg*>(NLMSG_DATA(h));
-            if (target_inodes.find(diag->idiag_inode) == target_inodes.end()) {
+            const auto f = target_inodes.find(diag->idiag_inode);
+            if (f == target_inodes.end()) {
                 continue;
             }
-            sockets.push_back(parse_diag(diag, socket_diag_query, target_inodes.find(diag->idiag_inode)->second));
+            sockets.push_back(parse_diag(diag, socket_diag_query, f->second));
         }
 
     }
