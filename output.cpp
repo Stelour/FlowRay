@@ -3,6 +3,7 @@
 #include <iostream>
 #include <netinet/in.h>
 #include <string>
+#include <iomanip>
 
 static std::string state_to_string(std::uint8_t state) {
     switch (state) {
@@ -49,24 +50,39 @@ void print_process_info(const ProcessInfo& proc_info) {
 }
 
 void print_socket_info(const std::vector<SocketInfo>& sockets, bool detail) {
-    std::cout << "Sockets:" << std::endl;
+    std::cout << "Sockets: " << sockets.size() << std::endl << std::endl;
+
+    std::cout << std::left
+    << std::setw(11) << "PROTOCOL |"
+    << std::setw(10) << "FAMILY |"
+    << std::setw(28) << "LOCAL"
+    << std::setw(28) << "REMOTE"
+    << std::setw(15) << "STATE";
+    if (detail) {
+        std::cout << std::setw(20) << "PIDS" << std::setw(12) << "INODE";
+    }
+    std::cout << std::endl << std::endl;
 
     for (const auto& socket : sockets) {
-        std::cout
-        << protocol_to_string(socket.protocol) << '\t'
-        << family_to_string(socket.family) << '\t'
-        << socket.local_ip << ':' << socket.local_port << " -> "
-        << socket.remote_ip << ':' << socket.remote_port;
+        std::cout << std::left
+        << std::setw(11) << protocol_to_string(socket.protocol)
+        << std::setw(10) << family_to_string(socket.family)
+        << std::setw(28) << socket.local_ip + ":" + std::to_string(socket.local_port)
+        << std::setw(28) << socket.remote_ip + ":" + std::to_string(socket.remote_port);
         if (socket.protocol == IPPROTO_TCP) {
-            std::cout << '\t' << state_to_string(socket.state) << std::endl;
+            std::cout << std::setw(15) << state_to_string(socket.state);
+        } else {
+            std::cout << std::setw(15) << "-";
         }
         if (detail) {
-            std::cout << "\tPID: ";
+            std::string pids;
             for (const auto pid : socket.pids) {
-                std::cout << pid << ' ';
+                if (!pids.empty()) {
+                    pids += ',';
+                }
+                pids += std::to_string(pid);
             }
-            std::cout << std::endl;
-            std::cout << "\tinode: " << socket.inode << std::endl;
+            std::cout << std::setw(20) << pids << std::setw(12) << socket.inode;
         }
         std::cout << std::endl;
     }
