@@ -128,17 +128,16 @@ static int receive_response(int fd,
 
         sockaddr_nl nladdr{};
 
-        struct iovec iov = {
-            .iov_base = buffer.data(),
-            .iov_len = buffer.size()
-        };
+        iovec iov{};
+        iov.iov_base = buffer.data();
+        iov.iov_len = buffer.size();
 
-        struct msghdr msg = {
-            .msg_name = &nladdr,
-            .msg_namelen = sizeof(nladdr),
-            .msg_iov = &iov,
-            .msg_iovlen = 1
-        };
+        msghdr msg{};
+        msg.msg_name = &nladdr;
+        msg.msg_namelen = sizeof(nladdr);
+        msg.msg_iov = &iov;
+        msg.msg_iovlen = 1;
+
         ssize_t ret = recvmsg(fd, &msg, 0);
         if (ret < 0) {
             if (errno == EINTR) {
