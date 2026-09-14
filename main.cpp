@@ -1,4 +1,8 @@
-#include "main.h"
+#include "headers/pid.h"
+#include "headers/proc_name.h"
+
+#include <CLI/CLI.hpp>
+#include <iostream>
 
 int main(int argc, char* argv[]) {
     CLI::App app{"FlowRay - linux application network activity analyzer"};

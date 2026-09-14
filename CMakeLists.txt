@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 4.2)
 project(
         flowray
-        VERSION 0.1.0
+        VERSION 0.2.0
         DESCRIPTION "Linux application network activity analyzer"
         LANGUAGES CXX
 )
@@ -20,17 +20,16 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(CLI11)
 
 add_executable(flowray main.cpp
-        pid.cpp
-        main.h
-        socket.cpp
-        socket.h
-        pid_child.cpp
-        output.cpp
-        pid.h
-        output.h
-        data.h
-        proc_name.cpp
-        proc_name.h
+        src/pid.cpp
+        src/socket.cpp
+        headers/socket.h
+        src/pid_child.cpp
+        src/output.cpp
+        headers/pid.h
+        headers/output.h
+        headers/data.h
+        src/proc_name.cpp
+        headers/proc_name.h
 )
 
 target_link_libraries(flowray PRIVATE CLI11::CLI11)

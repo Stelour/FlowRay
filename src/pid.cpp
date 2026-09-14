@@ -1,6 +1,6 @@
-#include "pid.h"
-#include "output.h"
-#include "socket.h"
+#include "../headers/pid.h"
+#include "../headers/output.h"
+#include "../headers/socket.h"
 
 #include <filesystem>
 #include <fstream>
