@@ -8,6 +8,7 @@
 #include <netinet/in.h>
 #include <string>
 #include <array>
+#include <algorithm>
 
 static bool check_pid_is_correct(const std::string& dir_path) {
     return std::filesystem::is_directory(dir_path);
@@ -37,22 +38,31 @@ static void find_socket_inodes(
     }
 }
 
-status_msg start_pid(int pid, bool need_print_about_proc, bool pid_tree, bool pid_detail) {
-    std::string str_pid = std::to_string(pid);
-    std::string dir_path = "/proc/" + str_pid;
-    if (check_pid_is_correct(dir_path) == false) {
-        std::cerr << "ERROR: incorrect PID" << std::endl;
+status_msg start_pid(const std::vector<std::uint32_t>& pids, bool need_print_about_proc, bool pid_tree, bool pid_detail) {
+    if (pids.empty()) {
+        std::cerr << "ERROR: no processes found" << std::endl;
         return status_msg::error;
     }
 
-    std::ifstream file_pid_comm(dir_path + "/comm");
-    std::string process_name;
-    std::getline(file_pid_comm, process_name);
+    std::vector<std::uint32_t> procs_pid = pids;
+    for (auto pid : pids) {
+        std::string dir_path = "/proc/" + std::to_string(pid);
 
-    std::vector<std::uint32_t> procs_pid;
-    procs_pid.push_back(pid);
-    if (pid_tree == true) {
-        push_pid_tree(pid, procs_pid);
+        if (!check_pid_is_correct(dir_path)) {
+            std::cerr << "ERROR: incorrect PID " << pid << std::endl;
+            return status_msg::error;
+        }
+    }
+
+    if (pid_tree) {
+        for (auto pid : pids) {
+            push_pid_tree(pid, procs_pid);
+        }
+        std::sort(procs_pid.begin(), procs_pid.end());
+        procs_pid.erase(
+            std::unique(procs_pid.begin(), procs_pid.end()),
+            procs_pid.end()
+        );
     }
 
     // std::unordered_set<std::uint32_t> socket_inodes = {};
@@ -61,7 +71,16 @@ status_msg start_pid(int pid, bool need_print_about_proc, bool pid_tree, bool pi
         find_socket_inodes("/proc/" + std::to_string(proc_pid), socket_inodes, proc_pid);
     }
 
-    ProcessInfo proc_info = {pid, process_name, dir_path};
+    std::vector<ProcessInfo> processes;
+    for (auto pid : procs_pid) {
+        std::ifstream file("/proc/" + std::to_string(pid) + "/comm");
+        if (!file) {
+            continue;
+        }
+        std::string name;
+        std::getline(file, name);
+        processes.push_back({pid,name});
+    }
 
     // req to socket
     const std::array<DiagQuery, 4> queries{{
@@ -79,7 +98,7 @@ status_msg start_pid(int pid, bool need_print_about_proc, bool pid_tree, bool pi
     }
 
     if (need_print_about_proc == true) {
-        print_process_info(proc_info);
+        print_process_info(processes);
         print_socket_info(sockets, pid_detail);
     }
 
