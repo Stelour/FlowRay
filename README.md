@@ -2,13 +2,31 @@
 
 Linux application network activity analyzer
 
-> FlowRay is a Linux networking tool for inspecting network activity of a specific process.
+> FlowRay inspects network sockets belonging to a specific Linux application and maps them back to the processes that own them..
+
+## Build
+
+**Requirements:**
+- Linux
+- C++20 compiler
+- CMake
+- Git
+
+git clone https://github.com/Stelour/FlowRay.git
+cd FlowRay
+
+cmake -S . -B build
+cmake --build build
+
+**Run:**
+
+./build/flowray --help
 
 ## Usage
 
 ### Target selection
 
-- `--pid (-p)`
+#### `--pid (-p)`
 
 Analyzes sockets belonging to the specified process.
 
@@ -16,7 +34,7 @@ FlowRay reads the process file descriptors from /proc/<PID>/fd, finds socket ino
 
 ./flowray --pid 12345
 
-- `--name (-n)`
+#### `--name (-n)`
 
 Analyze processes by their process name.
 
@@ -28,7 +46,7 @@ FlowRay scans /proc, reads /proc/<PID>/comm, and selects all processes whose nam
 
 ### Additional flags
 
-- `--tree (-t)`
+#### `--tree (-t)`
 
 Include descendant processes of the selected process or process name.
 
@@ -42,7 +60,7 @@ or:
 
 ./flowray --name Discord --tree
 
-- `--detail (-d)`
+#### `--detail (-d)`
 
 Shows additional information for each socket:
 
