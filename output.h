@@ -6,6 +6,6 @@
 #include <vector>
 
 void print_socket_info(const std::vector<SocketInfo>& sockets, bool detail);
-void print_process_info(const ProcessInfo& proc_info);
+void print_process_info(const std::vector<ProcessInfo>& processes);
 
 #endif //FLOWRAY_OUTPUT_H

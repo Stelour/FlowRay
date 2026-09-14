@@ -2,6 +2,7 @@
 #define FLOWRAY_MAIN_H
 
 #include "pid.h"
+#include "proc_name.h"
 
 #include <CLI/CLI.hpp>
 #include <iostream>

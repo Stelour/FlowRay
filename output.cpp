@@ -39,14 +39,12 @@ static std::string family_to_string(int family) {
     }
 }
 
-void print_process_info(const ProcessInfo& proc_info) {
-    std::cout << "PID: " << proc_info.pid << std::endl;
-    std::cout << "Process name: " << proc_info.name << std::endl;
+void print_process_info(const std::vector<ProcessInfo>& processes) {
+    std::cout << "Processes (" << processes.size() << ")" << std::endl;
+    for (const auto& process : processes) {
+        std::cout << "\tName: " << process.name << "[" << process.pid <<  "]" << std::endl;
+    }
     std::cout << std::endl;
-    // std::cout << "Socket inodes:" << std::endl;
-    // for (const std::uint32_t& s : proc_info.socket_inodes) {
-    //     std::cout << s << std::endl;
-    // }
 }
 
 void print_socket_info(const std::vector<SocketInfo>& sockets, bool detail) {
@@ -59,7 +57,7 @@ void print_socket_info(const std::vector<SocketInfo>& sockets, bool detail) {
     << std::setw(28) << "REMOTE"
     << std::setw(15) << "STATE";
     if (detail) {
-        std::cout << std::setw(20) << "PIDS" << std::setw(12) << "INODE";
+        std::cout << std::setw(12) << "PIDS" << std::setw(12) << "INODE";
     }
     std::cout << std::endl << std::endl;
 
@@ -82,7 +80,7 @@ void print_socket_info(const std::vector<SocketInfo>& sockets, bool detail) {
                 }
                 pids += std::to_string(pid);
             }
-            std::cout << std::setw(20) << pids << std::setw(12) << socket.inode;
+            std::cout << std::setw(12) << pids << std::setw(12) << socket.inode;
         }
         std::cout << std::endl;
     }

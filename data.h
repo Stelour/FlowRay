@@ -13,9 +13,8 @@ enum class status_msg {
 };
 
 struct ProcessInfo {
-    int pid{};
+    std::uint32_t pid{};
     std::string name;
-    std::filesystem::path dir_path;
 };
 
 struct DiagQuery {
