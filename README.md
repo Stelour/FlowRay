@@ -6,21 +6,17 @@ Linux application network activity analyzer
 
 ## Build
 
-**Requirements:**
-- Linux
-- C++20 compiler
-- CMake
-- Git
-
+```
 git clone https://github.com/Stelour/FlowRay.git
+
 cd FlowRay
 
 cmake -S . -B build
+
 cmake --build build
 
-**Run:**
-
 ./build/flowray --help
+```
 
 ## Usage
 
@@ -101,6 +97,7 @@ UDP        IPv4      0.0.0.0:34754               0.0.0.0:0                   -  
 ```
 
 In this example, --name selects all running processes named Discord.
+
 --tree also includes their descendant processes in the analysis, while --detail adds the owning PID and socket inode to the output.
 
 ## FAQ
