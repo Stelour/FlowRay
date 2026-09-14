@@ -29,6 +29,8 @@ add_executable(flowray main.cpp
         pid.h
         output.h
         data.h
+        proc_name.cpp
+        proc_name.h
 )
 
 target_link_libraries(flowray PRIVATE CLI11::CLI11)
