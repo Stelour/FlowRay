@@ -9,6 +9,8 @@
 #include <string>
 #include <array>
 #include <algorithm>
+#include <thread>
+#include <chrono>
 
 static bool check_pid_is_correct(const std::string& dir_path) {
     return std::filesystem::is_directory(dir_path);
@@ -38,12 +40,14 @@ static void find_socket_inodes(
     }
 }
 
-status_msg start_pid(const std::vector<std::uint32_t>& pids, bool need_print_about_proc, bool pid_tree, bool pid_detail) {
-    if (pids.empty()) {
-        std::cerr << "ERROR: no processes found" << std::endl;
-        return status_msg::error;
-    }
-
+status_msg get_proс_sockets(
+    const std::vector<uint32_t>& pids,
+    bool pid_tree,
+    std::vector<ProcessInfo>& processes,
+    std::vector<SocketInfo>& sockets
+    ) {
+    processes.clear();
+    sockets.clear();
     std::vector<std::uint32_t> procs_pid = pids;
     for (auto pid : pids) {
         std::string dir_path = "/proc/" + std::to_string(pid);
@@ -71,7 +75,6 @@ status_msg start_pid(const std::vector<std::uint32_t>& pids, bool need_print_abo
         find_socket_inodes("/proc/" + std::to_string(proc_pid), socket_inodes, proc_pid);
     }
 
-    std::vector<ProcessInfo> processes;
     for (auto pid : procs_pid) {
         std::ifstream file("/proc/" + std::to_string(pid) + "/comm");
         if (!file) {
@@ -90,16 +93,41 @@ status_msg start_pid(const std::vector<std::uint32_t>& pids, bool need_print_abo
         {AF_INET6, IPPROTO_UDP}
     }};
 
-    std::vector<SocketInfo> sockets;
+
     for (const auto& query : queries) {
         if (socket_req(socket_inodes, sockets, query) != status_msg::success) {
             return status_msg::error;
         }
     }
+    return status_msg::success;
+}
 
-    if (need_print_about_proc == true) {
-        print_process_info(processes);
-        print_socket_info(sockets, pid_detail);
+status_msg start_pid(const std::vector<std::uint32_t>& pids, bool pid_tree, bool pid_detail, bool proc_live) {
+    std::vector<ProcessInfo> processes;
+    std::vector<SocketInfo> sockets;
+    if (get_proс_sockets(pids, pid_tree, processes, sockets) != status_msg::success) {
+        std::cerr << "ERROR: failed to get proc_sockets" << std::endl;
+        return status_msg::error;
+    }
+
+    print_process_info(processes);
+    print_socket_info(sockets, pid_detail);
+
+    if (proc_live) {
+        std::cout << std::endl;
+        while (true) {
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+            std::vector<ProcessInfo> new_processes;
+            std::vector<SocketInfo> new_sockets;
+            if (get_proс_sockets(pids, pid_tree, new_processes, new_sockets) != status_msg::success) {
+                continue;
+            }
+
+            print_socket_diff(new_sockets, sockets, pid_detail);
+
+            processes = std::move(new_processes);
+            sockets = std::move(new_sockets);
+        }
     }
 
     return status_msg::success;

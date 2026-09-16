@@ -22,20 +22,25 @@ int main(int argc, char* argv[]) {
         );
 
     bool pid_tree = false;
-    CLI::Option *op_tree = app.add_flag(
+    app.add_flag(
         "--tree,-t",
         pid_tree,
         "Include descendant processes in the analysis"
         );
-    // op_tree->needs(op_pid);
 
     bool pid_detail = false;
-    CLI::Option *op_detail = app.add_flag(
+    app.add_flag(
         "--detail,-d",
         pid_detail,
         "Show detailed socket information, including PID and inode"
         );
-    // op_detail->needs(op_pid);
+
+    bool proc_live = false;
+    app.add_flag(
+        "--live,-l",
+        proc_live,
+        "Monitor socket changes continuously"
+        );
 
     op_pid->excludes(op_name);
     op_name->excludes(op_pid);
@@ -52,7 +57,7 @@ int main(int argc, char* argv[]) {
     }
 
     if (*op_pid) {
-        if (start_pid({pid}, true, pid_tree, pid_detail) != status_msg::success) {
+        if (start_pid({pid}, pid_tree, pid_detail, proc_live) != status_msg::success) {
             std::cerr << "ERROR: failed to start process pid " << std::endl;
             return -1;
         }
@@ -62,7 +67,7 @@ int main(int argc, char* argv[]) {
             std::cerr << "ERROR: process " << proc_name << " not found" << std::endl;
             return -1;
         }
-        if (start_pid(pids, true, pid_tree, pid_detail) != status_msg::success) {
+        if (start_pid(pids, pid_tree, pid_detail, proc_live) != status_msg::success) {
             std::cerr << "ERROR: failed to start process pid " << std::endl;
             return -1;
         }

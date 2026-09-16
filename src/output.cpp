@@ -85,3 +85,39 @@ void print_socket_info(const std::vector<SocketInfo>& sockets, bool detail) {
         std::cout << std::endl;
     }
 }
+
+void print_socket_diff(const std::vector<SocketInfo>& cur, const std::vector<SocketInfo>& prev, bool detail) {
+    for (const auto& old_socket : prev) {
+        bool found = false;
+
+        for (const auto& new_socket : cur) {
+            if (old_socket.inode == new_socket.inode) {
+                found = true;
+                break;
+            }
+        }
+
+        if (!found) {
+            // std::cout << "[-] ";
+            // print_socket(old_socket, detail);
+            std::cout << "[-] inode: " << old_socket.inode << '\n';
+        }
+    }
+
+    for (const auto& new_socket : cur) {
+        bool found = false;
+
+        for (const auto& old_socket : prev) {
+            if (new_socket.inode == old_socket.inode) {
+                found = true;
+                break;
+            }
+        }
+
+        if (!found) {
+            // std::cout << "[+] ";
+            // print_socket(new_socket, detail);
+            std::cout << "[+] inode: " << new_socket.inode << '\n';
+        }
+    }
+}
