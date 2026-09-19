@@ -139,14 +139,15 @@ static void update_live_state(std::vector<LiveSocket>& live_sockets, const std::
 }
 
 static status_msg start_live_mode(
-    const std::vector<std::uint32_t>& pids,
+    std::vector<std::uint32_t> pids,
     bool pid_tree, bool pid_detail, const std::string& proc_name
     ) {
     std::vector<LiveSocket> live_sockets;
 
+
     while (true) {
         if(!proc_name.empty()) {
-            auto pids = find_pids_by_name(proc_name);
+            pids = find_pids_by_name(proc_name);
         }
 
         std::vector<ProcessInfo> new_processes;
