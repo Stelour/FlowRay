@@ -57,7 +57,7 @@ int main(int argc, char* argv[]) {
     }
 
     if (*op_pid) {
-        if (start_pid({pid}, pid_tree, pid_detail, proc_live) != status_msg::success) {
+        if (start_pid({pid}, pid_tree, pid_detail, proc_live, proc_name) != status_msg::success) {
             std::cerr << "ERROR: failed to start process pid " << std::endl;
             return -1;
         }
@@ -67,7 +67,7 @@ int main(int argc, char* argv[]) {
             std::cerr << "ERROR: process " << proc_name << " not found" << std::endl;
             return -1;
         }
-        if (start_pid(pids, pid_tree, pid_detail, proc_live) != status_msg::success) {
+        if (start_pid(pids, pid_tree, pid_detail, proc_live, proc_name) != status_msg::success) {
             std::cerr << "ERROR: failed to start process pid " << std::endl;
             return -1;
         }

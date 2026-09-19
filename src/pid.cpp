@@ -1,6 +1,7 @@
 #include "../headers/pid.h"
 #include "../headers/output.h"
 #include "../headers/socket.h"
+#include "../headers/proc_name.h"
 
 #include <filesystem>
 #include <fstream>
@@ -139,11 +140,15 @@ static void update_live_state(std::vector<LiveSocket>& live_sockets, const std::
 
 static status_msg start_live_mode(
     const std::vector<std::uint32_t>& pids,
-    bool pid_tree, bool pid_detail
+    bool pid_tree, bool pid_detail, const std::string& proc_name
     ) {
     std::vector<LiveSocket> live_sockets;
 
     while (true) {
+        if(!proc_name.empty()) {
+            auto pids = find_pids_by_name(proc_name);
+        }
+
         std::vector<ProcessInfo> new_processes;
         std::vector<SocketInfo> new_sockets;
 
@@ -167,10 +172,10 @@ static status_msg start_live_mode(
     }
 }
 
-status_msg start_pid(const std::vector<std::uint32_t>& pids, bool pid_tree, bool pid_detail, bool proc_live) {
+status_msg start_pid(const std::vector<std::uint32_t>& pids, bool pid_tree, bool pid_detail, bool proc_live, const std::string& proc_name) {
     if (proc_live) {
         // std::cout << std::endl;
-        return start_live_mode(pids, pid_tree, pid_detail);
+        return start_live_mode(pids, pid_tree, pid_detail, proc_name);
     }
 
     std::vector<ProcessInfo> processes;
