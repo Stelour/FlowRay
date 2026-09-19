@@ -10,6 +10,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 #include <vector>
+#include <unordered_map>
 
 struct DiagRequest {
     nlmsghdr nlh{};

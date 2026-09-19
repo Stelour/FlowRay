@@ -11,6 +11,8 @@
 #include <algorithm>
 #include <thread>
 #include <chrono>
+#include <unordered_map>
+#include <cstdlib>
 
 static bool check_pid_is_correct(const std::string& dir_path) {
     return std::filesystem::is_directory(dir_path);
@@ -102,7 +104,75 @@ status_msg get_proс_sockets(
     return status_msg::success;
 }
 
+static void update_live_state(std::vector<LiveSocket>& live_sockets, const std::vector<SocketInfo>& new_sockets) {
+    for (auto& socket : live_sockets) {
+        socket.active = false;
+    }
+
+    for (const auto& sock : new_sockets) {
+        bool flag = false;
+
+        for (auto& live_socket : live_sockets) {
+            if (live_socket.socket.inode == sock.inode) {
+                live_socket.socket = sock;
+                live_socket.last_seen = std::chrono::system_clock::now();
+                live_socket.active = true;
+
+                flag = true;
+                break;
+            }
+        }
+
+
+        if (!flag) {
+            LiveSocket new_socket;
+
+            new_socket.socket = sock;
+            new_socket.first_seen = std::chrono::system_clock::now();
+            new_socket.last_seen = std::chrono::system_clock::now();
+            new_socket.active = true;
+
+            live_sockets.push_back(new_socket);
+        }
+    }
+}
+
+static status_msg start_live_mode(
+    const std::vector<std::uint32_t>& pids,
+    bool pid_tree, bool pid_detail
+    ) {
+    std::vector<LiveSocket> live_sockets;
+
+    while (true) {
+        std::vector<ProcessInfo> new_processes;
+        std::vector<SocketInfo> new_sockets;
+
+        if (get_proс_sockets(pids, pid_tree, new_processes, new_sockets) != status_msg::success) {
+            continue;
+        }
+
+        update_live_state(live_sockets, new_sockets);
+
+        // print_socket_diff(new_sockets, sockets, pid_detail);
+        //
+        // processes = std::move(new_processes);
+        // sockets = std::move(new_sockets);
+
+        std::system("clear");
+        std::cout << "FlowRay live mode" << std::endl << std::endl;
+        print_process_info(new_processes);
+        print_live_table(live_sockets, pid_detail);
+
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+    }
+}
+
 status_msg start_pid(const std::vector<std::uint32_t>& pids, bool pid_tree, bool pid_detail, bool proc_live) {
+    if (proc_live) {
+        // std::cout << std::endl;
+        return start_live_mode(pids, pid_tree, pid_detail);
+    }
+
     std::vector<ProcessInfo> processes;
     std::vector<SocketInfo> sockets;
     if (get_proс_sockets(pids, pid_tree, processes, sockets) != status_msg::success) {
@@ -110,25 +180,9 @@ status_msg start_pid(const std::vector<std::uint32_t>& pids, bool pid_tree, bool
         return status_msg::error;
     }
 
+    std::system("clear");
     print_process_info(processes);
     print_socket_info(sockets, pid_detail);
-
-    if (proc_live) {
-        std::cout << std::endl;
-        while (true) {
-            std::this_thread::sleep_for(std::chrono::seconds(1));
-            std::vector<ProcessInfo> new_processes;
-            std::vector<SocketInfo> new_sockets;
-            if (get_proс_sockets(pids, pid_tree, new_processes, new_sockets) != status_msg::success) {
-                continue;
-            }
-
-            print_socket_diff(new_sockets, sockets, pid_detail);
-
-            processes = std::move(new_processes);
-            sockets = std::move(new_sockets);
-        }
-    }
 
     return status_msg::success;
 }

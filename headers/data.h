@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <set>
 #include <string>
+#include <chrono>
 #include <unordered_map>
 
 enum class status_msg {
@@ -36,6 +37,15 @@ struct SocketInfo {
 
     std::string remote_ip;
     std::uint16_t remote_port{};
+};
+
+struct LiveSocket {
+    SocketInfo socket;
+
+    std::chrono::system_clock::time_point first_seen;
+    std::chrono::system_clock::time_point last_seen;
+
+    bool active{};
 };
 
 #endif //FLOWRAY_DATA_H
