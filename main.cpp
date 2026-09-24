@@ -1,5 +1,6 @@
 #include "headers/pid.h"
 #include "headers/proc_name.h"
+#include "headers/ebpf_monitor.h"
 
 #include <CLI/CLI.hpp>
 #include <iostream>
@@ -42,6 +43,13 @@ int main(int argc, char* argv[]) {
         "Monitor socket changes continuously"
         );
 
+    bool ebpf = false;
+    app.add_flag(
+        "--ebpf,-e",
+        ebpf,
+        "ebpf"
+        );
+
     op_pid->excludes(op_name);
     op_name->excludes(op_pid);
 
@@ -72,5 +80,10 @@ int main(int argc, char* argv[]) {
             return -1;
         }
     }
+
+    if (ebpf) {
+
+    }
+
     return 0;
 }
