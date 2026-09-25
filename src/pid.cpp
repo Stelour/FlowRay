@@ -164,7 +164,8 @@ static status_msg start_live_mode(
         // processes = std::move(new_processes);
         // sockets = std::move(new_sockets);
 
-        std::system("clear");
+        std::cout << "\033[2J\033[H" << std::flush;
+        // TODO: FIXED! The terminal is not cleared upon data overflow
         std::cout << "FlowRay live mode" << std::endl << std::endl;
         print_process_info(new_processes);
         print_live_table(live_sockets, pid_detail);

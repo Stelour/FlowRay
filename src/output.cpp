@@ -121,9 +121,12 @@ static void print_live_socket_info(const LiveSocket& live_socket, bool detail) {
     << std::setw(28) << socket.remote_ip + ":" + std::to_string(socket.remote_port);
 
     if (live_socket.active) {
-        std::cout
-        << std::setw(15) << state_to_string(socket.state)
-        << std::setw(13) << format_time(live_socket.first_seen);
+        if (socket.protocol == IPPROTO_TCP) {
+            std::cout << std::setw(15) << state_to_string(socket.state);
+        } else {
+            std::cout << std::setw(15) << "-";
+        }
+        std::cout << std::setw(13) << format_time(live_socket.first_seen);
     } else {
         std::cout << std::setw(13) << format_time(live_socket.last_seen);
     }
