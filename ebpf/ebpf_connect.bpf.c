@@ -64,6 +64,7 @@ int handle_connect(struct trace_event_raw_sys_enter *ctx) {
             return 0;
         }
 
+        // __builtin_memset(e, 0, sizeof(*e));
         __builtin_memcpy(e->remote_addr, &addr4.sin_addr, sizeof(addr4.sin_addr));
         e->remote_port = bpf_ntohs(addr4.sin_port);
     } else if (family == AF_INET6) {
