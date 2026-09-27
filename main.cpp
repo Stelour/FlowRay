@@ -1,9 +1,12 @@
 #include "headers/pid.h"
 #include "headers/proc_name.h"
-#include "headers/ebpf_monitor.h"
 
 #include <CLI/CLI.hpp>
 #include <iostream>
+
+/*
+TODO: output with ncurses for --live; flag --ring-bufer-size; flag --socket
+*/
 
 int main(int argc, char* argv[]) {
     CLI::App app{"FlowRay - linux application network activity analyzer"};
