@@ -1,12 +1,8 @@
 .idea/
-*.iml
 
 cmake-build-*/
-build/
 
 *.o
-*.obj
-*.a
-*.so
 
-flowray
+vmlinux.h
+*.skel.h
