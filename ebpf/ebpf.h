@@ -9,6 +9,8 @@
 
 struct event {
     unsigned int pid;
+    unsigned int tid;
+
     int fd;
 
     unsigned short family;
@@ -17,6 +19,8 @@ struct event {
     unsigned char remote_addr[FLOWRAY_ADDR_LEN];
 
     char comm[FLOWRAY_COMM_LEN];
+
+    int result;
 };
 
 #endif //FLOWRAY_EBPF_H

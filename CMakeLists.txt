@@ -30,9 +30,9 @@ add_executable(flowray main.cpp
         headers/data.h
         src/proc_name.cpp
         headers/proc_name.h
-        ebpf/ebpf_connect.bpf.c
-        ebpf/ebpf.h
-        ebpf/ebpf_monitor.cpp
+#        ebpf/ebpf_connect.bpf.c
+#        ebpf/ebpf.h
+#        ebpf/ebpf_monitor.cpp
 )
 
 target_link_libraries(flowray PRIVATE CLI11::CLI11)
