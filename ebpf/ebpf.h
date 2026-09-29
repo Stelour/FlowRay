@@ -21,6 +21,15 @@ struct event {
     char comm[FLOWRAY_COMM_LEN];
 
     int result;
+
+    int type;
+    int protocol;
+};
+
+struct socket_info {
+    int family;
+    int type;
+    int protocol;
 };
 
 #endif //FLOWRAY_EBPF_H

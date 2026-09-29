@@ -7,6 +7,7 @@
 
 /*
 TODO: output with ncurses for --live; flag --ring-bufer-size; flag --socket
+нужно отслеживать открытие/закрытие процессов в ebpf
 */
 
 int main(int argc, char* argv[]) {
@@ -79,14 +80,13 @@ int main(int argc, char* argv[]) {
             std::cerr << "ERROR: process " << proc_name << " not found" << std::endl;
             return -1;
         }
-        if (start_pid(pids, pid_tree, pid_detail, proc_live, proc_name) != status_msg::success) {
+        if (ebpf) {
+            ebpf_start(pids, proc_name, pid_tree);
+        } else if (start_pid(pids, pid_tree, pid_detail, proc_live, proc_name) != status_msg::success) {
             std::cerr << "ERROR: failed to start process pid " << std::endl;
             return -1;
         }
-    }
 
-    if (ebpf) {
-        ebpf_start();
     }
 
     return 0;

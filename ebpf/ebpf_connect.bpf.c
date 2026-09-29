@@ -27,11 +27,39 @@ struct {
     __type(value, struct event);
 } pending_connects SEC(".maps");
 
+struct {
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __uint(max_entries, 16384);
+    __type(key, __u64);
+    __type(value, struct socket_info);
+} tmp_sockets SEC(".maps");
+
+struct {
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __uint(max_entries, 65536);
+    __type(key, __u64);
+    __type(value, struct socket_info);
+} sockets SEC(".maps");
+
+struct {
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __uint(max_entries, 10240);
+    __type(key, __u32);
+    __type(value, __u8);
+} allowed_pids SEC(".maps");
+
 SEC("tp/syscalls/sys_enter_connect")
 int handle_connect(struct trace_event_raw_sys_enter *ctx) {
     __u64 id = bpf_get_current_pid_tgid();
-    int pid = id >> 32;
-    int tid = (__u32)id;
+    __u32 pid = id >> 32;
+    __u32 tid = (__u32)id;
+
+    __u8 *allowed =
+    bpf_map_lookup_elem(&allowed_pids, &pid);
+
+    if (!allowed) {
+        return 0;
+    }
 
     int fd = (int)ctx->args[0];
     void *addr = (void *)ctx->args[1];
@@ -88,9 +116,18 @@ int handle_connect(struct trace_event_raw_sys_enter *ctx) {
         __builtin_memcpy(e.remote_addr, &addr6.sin6_addr, sizeof(addr6.sin6_addr));
         e.remote_port = bpf_ntohs(addr6.sin6_port);
     }
+    // bpf_ringbuf_submit(e, 0);
+
+    __u64 key = ((__u64)pid << 32) | (__u32)fd;
+
+    struct socket_info *info = bpf_map_lookup_elem(&sockets, &key);
+
+    if (info) {
+        e.type = info->type;
+        e.protocol = info->protocol;
+    }
 
     bpf_map_update_elem(&pending_connects,  &id, &e,  BPF_ANY);
-    // bpf_ringbuf_submit(e, 0);
 
     return 0;
 }
@@ -113,3 +150,75 @@ int handle_connect_exit(struct trace_event_raw_sys_exit *ctx) {
 
     return 0;
 }
+
+/*
+struct tracepoint__syscalls__sys_enter_socket {
+    unsigned long long common_tp_fields;
+    int __syscall_nr;
+    long family;
+    long type;
+    long protocol;
+};
+*/
+
+SEC("tp/syscalls/sys_enter_socket")
+int handle_enter_socket(struct trace_event_raw_sys_enter *ctx) {
+    __u64 id = bpf_get_current_pid_tgid();
+
+    struct socket_info info = {};
+
+    info.family = ctx->args[0];
+    info.type = ctx->args[1];
+    info.protocol = ctx->args[2];
+
+    bpf_map_update_elem(&tmp_sockets, &id, &info, BPF_ANY);
+
+    return 0;
+}
+
+/*
+struct trace_event_raw_sys_exit {
+    struct trace_entry ent;
+    long int id;
+    long int ret;
+    char __data[0];
+};
+*/
+
+SEC("tp/syscalls/sys_exit_socket")
+int handle_socket_exit(struct trace_event_raw_sys_exit *ctx) {
+    __u64 id = bpf_get_current_pid_tgid();
+
+    struct socket_info *info = bpf_map_lookup_elem(&tmp_sockets, &id);
+
+    if (!info) {
+        return 0;
+    }
+
+    __u32 pid = id >> 32;
+    int fd = (int)ctx->ret;
+
+    if (fd >= 0) {
+        __u64 key = ((__u64)pid << 32) | (__u32)fd;
+
+        bpf_map_update_elem(&sockets, &key, info, BPF_ANY);
+    }
+
+    bpf_map_delete_elem(&tmp_sockets, &id);
+
+    return 0;
+}
+
+/*
+
+struct trace_event_raw_sys_enter_close {
+    unsigned short common_type;
+    unsigned char common_flags;
+    unsigned char common_preempt_count;
+    int common_pid;
+
+    int __syscall_nr;
+    long fd;
+};
+
+*/

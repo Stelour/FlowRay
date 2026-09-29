@@ -4,13 +4,19 @@
 #include "ebpf.h"
 #include "ebpf_monitor.h"
 #include "ebpf_connect.skel.h"
+#include "../headers/proc_name.h"
+#include "../headers/pid.h"
+#include "../headers/output.h"
 
 #include <iostream>
 #include <csignal>
 #include <cerrno>
+#include <cstdint>
 #include <string>
+#include <vector>
 #include <arpa/inet.h>
 #include <bpf/libbpf.h>
+#include <bpf/bpf.h>
 
 static volatile sig_atomic_t exiting = 0;
 
@@ -40,17 +46,52 @@ static int handle_event(void *ctx, void *data, size_t data_sz) {
     }
     else {
         res_from_struct = "FAILED";
+        return 0;
+    }
+
+    int base_type = e->type & 0xF;
+    std::string prt;
+
+    if (e->protocol == IPPROTO_TCP) {
+        prt = "TCP";
+    } else if (e->protocol == IPPROTO_UDP) {
+        prt = "UDP";
+    } else if (e->protocol == 0 && base_type == SOCK_STREAM) {
+        prt = "TCP";
+    } else if (e->protocol == 0 && base_type == SOCK_DGRAM) {
+        prt = "UDP";
+    } else {
+        prt = "UNKNOWN";
     }
 
     std::cout << "PID: " << e->pid << " COMM: " << e->comm << " RESULT: " << res_from_struct << " FAMILY: " << e->family
-    << " ADDR: " << remote_ip << ":" << e->remote_port << std::endl;
+    << " ADDR: " << remote_ip << ":" << e->remote_port
+    << " PROTOCOL: " << prt << std::endl;
 
     return 0;
 }
 
-int ebpf_start() {
+int ebpf_start(const std::vector<std::uint32_t>& pids, const std::string& proc_name, bool pid_tree) {
     std::signal(SIGINT, handle_signal);
     std::signal(SIGTERM, handle_signal);
+
+    std::vector<std::uint32_t> procs_pid = pids;
+    if (pid_tree) {
+        for (auto pid : procs_pid) {
+            push_pid_tree(pid, procs_pid);
+        }
+        std::sort(procs_pid.begin(), procs_pid.end());
+        procs_pid.erase(
+            std::unique(procs_pid.begin(), procs_pid.end()),
+            procs_pid.end()
+        );
+    }
+
+    std::cout << "PIDS: (" << procs_pid.size() << ")" << std::endl << "\t";
+    for (auto pid : procs_pid) {
+        std::cout << pid << " ";
+    }
+    std::cout << std::endl << std::endl;
 
     int err;
 
@@ -80,6 +121,14 @@ int ebpf_start() {
         std::cerr << "Failed to create ring buffer" << std::endl;
         ebpf_connect_bpf__destroy(skel);
         return 1;
+    }
+
+    std::uint8_t value = 1;
+    for (auto pid : procs_pid) {
+        int err = bpf_map_update_elem(bpf_map__fd(skel->maps.allowed_pids), &pid, &value, BPF_ANY);
+        if (err) {
+            std::cerr << "Failed to update element for PID: " << pid << std::endl;
+        }
     }
 
     std::cout << "FlowRay eBPF monitor started" << std::endl;
