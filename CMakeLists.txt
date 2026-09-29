@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 4.2)
 project(
         flowray
-        VERSION 0.2.0
+        VERSION 0.3.0
         DESCRIPTION "Linux application network activity analyzer"
         LANGUAGES CXX
 )
@@ -19,6 +19,40 @@ FetchContent_Declare(
 
 FetchContent_MakeAvailable(CLI11)
 
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(LIBBPF REQUIRED IMPORTED_TARGET libbpf)
+
+set(EBPF_DIR ${CMAKE_CURRENT_SOURCE_DIR}/ebpf)
+
+find_program(CLANG_EXECUTABLE
+        NAMES clang
+        REQUIRED
+)
+
+find_program(BPFTOOL_EXECUTABLE
+        NAMES bpftool
+        REQUIRED
+)
+
+add_custom_command(
+        OUTPUT ${EBPF_DIR}/ebpf_connect.skel.h
+
+        COMMAND ${CLANG_EXECUTABLE} -g -O2 -target bpf -I${EBPF_DIR}
+        -c ${EBPF_DIR}/ebpf_connect.bpf.c -o ${EBPF_DIR}/ebpf_connect.bpf.o
+
+        COMMAND /bin/sh -c
+        "\"${BPFTOOL_EXECUTABLE}\" gen skeleton \"${EBPF_DIR}/ebpf_connect.bpf.o\" > \"${EBPF_DIR}/ebpf_connect.skel.h\""
+
+        DEPENDS ${EBPF_DIR}/ebpf_connect.bpf.c ${EBPF_DIR}/ebpf.h ${EBPF_DIR}/vmlinux.h
+
+        COMMENT "Building eBPF program"
+        VERBATIM
+)
+
+add_custom_target(ebpf_build
+        DEPENDS ${EBPF_DIR}/ebpf_connect.skel.h
+)
+
 add_executable(flowray main.cpp
         src/pid.cpp
         src/socket.cpp
@@ -30,15 +64,19 @@ add_executable(flowray main.cpp
         headers/data.h
         src/proc_name.cpp
         headers/proc_name.h
+        ebpf/ebpf_monitor.h
 #        ebpf/ebpf_connect.bpf.c
-#        ebpf/ebpf.h
-#        ebpf/ebpf_monitor.cpp
+        ebpf/ebpf.h
+        ebpf/ebpf_monitor.cpp
+        ebpf/ebpf_connect.skel.h
 )
 
-target_link_libraries(flowray PRIVATE CLI11::CLI11)
+target_link_libraries(flowray PRIVATE CLI11::CLI11 PkgConfig::LIBBPF)
 
 target_compile_options(flowray PRIVATE
         -Wall
         -Wextra
         -Wpedantic
 )
+
+add_dependencies(flowray ebpf_build)
