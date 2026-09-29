@@ -210,7 +210,6 @@ int handle_socket_exit(struct trace_event_raw_sys_exit *ctx) {
 }
 
 /*
-
 struct trace_event_raw_sys_enter_close {
     unsigned short common_type;
     unsigned char common_flags;
@@ -220,5 +219,14 @@ struct trace_event_raw_sys_enter_close {
     int __syscall_nr;
     long fd;
 };
-
 */
+
+SEC("tp/syscalls/sys_enter_close")
+int handle_close(struct trace_event_raw_sys_enter *ctx) {
+    int fd = ctx->args[0];
+    __u64 id = bpf_get_current_pid_tgid();
+    __u32 pid = id >> 32;
+    __u64 key = ((__u64)pid << 32) | (__u32)fd;
+
+    bpf_map_delete_elem(&sockets, &key);
+}
