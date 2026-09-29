@@ -1,5 +1,6 @@
 #include "headers/pid.h"
 #include "headers/proc_name.h"
+#include "ebpf/ebpf_monitor.h"
 
 #include <CLI/CLI.hpp>
 #include <iostream>
@@ -47,7 +48,7 @@ int main(int argc, char* argv[]) {
         );
 
     bool ebpf = false;
-    app.add_flag(
+    CLI::Option *op_ebpf = app.add_flag(
         "--ebpf,-e",
         ebpf,
         "ebpf"
@@ -58,7 +59,7 @@ int main(int argc, char* argv[]) {
 
     CLI11_PARSE(app, argc, argv);
 
-    if (!(*op_pid || *op_name)) {
+    if (!(*op_pid || *op_name || *op_ebpf)) {
         if (pid_tree || pid_detail) {
             std::cerr << "ERROR: --tree and --detail require --pid or --name" << std::endl;
             return -1;
@@ -85,7 +86,7 @@ int main(int argc, char* argv[]) {
     }
 
     if (ebpf) {
-
+        ebpf_start();
     }
 
     return 0;

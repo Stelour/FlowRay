@@ -2,6 +2,7 @@
 // https://github.com/libbpf/libbpf-bootstrap/blob/master/examples/c/bootstrap.c
 
 #include "ebpf.h"
+#include "ebpf_monitor.h"
 #include "ebpf_connect.skel.h"
 
 #include <iostream>
@@ -29,13 +30,25 @@ static int handle_event(void *ctx, void *data, size_t data_sz) {
         sizeof(remote_ip)
     );
 
-    std::cout << "PID: " << e->pid << " COMM: " << e->comm << " FAMILY: " << e->family
+    std::string res_from_struct;
+
+    if (e->result == 0) {
+        res_from_struct = "SUCCESS";
+    }
+    else if (e->result == -EINPROGRESS) {
+        res_from_struct = "PENDING";
+    }
+    else {
+        res_from_struct = "FAILED";
+    }
+
+    std::cout << "PID: " << e->pid << " COMM: " << e->comm << " RESULT: " << res_from_struct << " FAMILY: " << e->family
     << " ADDR: " << remote_ip << ":" << e->remote_port << std::endl;
 
     return 0;
 }
 
-int main() {
+int ebpf_start() {
     std::signal(SIGINT, handle_signal);
     std::signal(SIGTERM, handle_signal);
 
