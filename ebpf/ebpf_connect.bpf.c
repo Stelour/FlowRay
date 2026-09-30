@@ -54,10 +54,7 @@ int handle_connect(struct trace_event_raw_sys_enter *ctx) {
     __u32 pid = id >> 32;
     __u32 tid = (__u32)id;
 
-    __u8 *allowed =
-    bpf_map_lookup_elem(&allowed_pids, &pid);
-
-    if (!allowed) {
+    if (!bpf_map_lookup_elem(&allowed_pids, &pid)) {
         return 0;
     }
 
