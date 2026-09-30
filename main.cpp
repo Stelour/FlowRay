@@ -70,7 +70,9 @@ int main(int argc, char* argv[]) {
     }
 
     if (*op_pid) {
-        if (start_pid({pid}, pid_tree, pid_detail, proc_live, proc_name) != status_msg::success) {
+        if (ebpf) {
+            ebpf_start({pid}, proc_name, pid_tree);
+        } else if (start_pid({pid}, pid_tree, pid_detail, proc_live, proc_name) != status_msg::success) {
             std::cerr << "ERROR: failed to start process pid " << std::endl;
             return -1;
         }
