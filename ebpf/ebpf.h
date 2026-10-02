@@ -32,4 +32,17 @@ struct socket_info {
     int protocol;
 };
 
+struct flow_key {
+    unsigned short family;
+    unsigned short remote_port;
+    unsigned char remote_addr[FLOWRAY_ADDR_LEN];
+};
+
+struct flow_metrics {
+    unsigned long long rx_bytes;
+    unsigned long long tx_bytes;
+    unsigned long long rx_packets;
+    unsigned long long tx_packets;
+};
+
 #endif //FLOWRAY_EBPF_H

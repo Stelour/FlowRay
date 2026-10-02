@@ -13,6 +13,9 @@
 
 #include "ebpf.h"
 
+#define ETH_P_IP   0x0800 /*Internet Protocol packet*/
+#define ETH_P_IPV6 0x86DD
+
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
 
 struct {
@@ -48,7 +51,14 @@ struct {
     __type(value, __u8);
 } allowed_pids SEC(".maps");
 
-static __always_inline int parse_user_sockaddr(void *addr, struct event *e) {
+struct {
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __uint(max_entries, 65536);
+    __type(key, struct flow_key);
+    __type(value, struct flow_metrics);
+} flow_mtr SEC(".maps");
+
+static int parse_user_sockaddr(void *addr, struct event *e) {
     if (!addr) {
         return -1;
     }
@@ -66,16 +76,20 @@ static __always_inline int parse_user_sockaddr(void *addr, struct event *e) {
 
     if (family == AF_INET) {
         struct sockaddr_in addr4 = {};
-        if (bpf_probe_read_user(&addr4, sizeof(addr4), addr) < 0)
+        if (bpf_probe_read_user(&addr4, sizeof(addr4), addr) < 0) {
             return -1;
+        }
         __builtin_memcpy(e->remote_addr, &addr4.sin_addr, sizeof(addr4.sin_addr));
         e->remote_port = bpf_ntohs(addr4.sin_port);
-    } else {
+    } else if (family == AF_INET6) {
         struct sockaddr_in6 addr6 = {};
-        if (bpf_probe_read_user(&addr6, sizeof(addr6), addr) < 0)
+        if (bpf_probe_read_user(&addr6, sizeof(addr6), addr) < 0) {
             return -1;
+        }
         __builtin_memcpy(e->remote_addr, &addr6.sin6_addr, sizeof(addr6.sin6_addr));
         e->remote_port = bpf_ntohs(addr6.sin6_port);
+    } else {
+        return -1;
     }
 
     return 0;
@@ -135,6 +149,17 @@ int handle_connect_exit(struct trace_event_raw_sys_exit *ctx) {
     long ret = ctx->ret;
     pend->result = ret;
 
+    if (pend->result == 0 || pend->result == -115) {
+        struct flow_key fkey = {};
+        fkey.family = pend->family;
+        __builtin_memcpy(&fkey.remote_addr, &pend->remote_addr, sizeof(fkey.remote_addr));
+        struct flow_metrics *m = bpf_map_lookup_elem(&flow_mtr, &fkey);
+        if (!m) {
+            struct flow_metrics zero = {};
+            bpf_map_update_elem(&flow_mtr, &fkey, &zero, BPF_NOEXIST);
+        }
+    }
+
     bpf_ringbuf_output(&events, pend, sizeof(*pend), 0);
     bpf_map_delete_elem(&pending_connects, &id);
 
@@ -165,6 +190,10 @@ int handle_enter_socket(struct trace_event_raw_sys_enter *ctx) {
     info.family = ctx->args[0];
     info.type = ctx->args[1];
     info.protocol = ctx->args[2];
+
+    if (info.family != AF_INET && info.family != AF_INET6) {
+        return 0;
+    }
 
     int base_type = info.type & 0xf;
 
@@ -272,6 +301,122 @@ int handle_enter_sendto(struct trace_event_raw_sys_enter *ctx) {
     e.result = 0;
     bpf_get_current_comm(e.comm, sizeof(e.comm));
 
+    struct flow_key fkey = {};
+    fkey.family = e.family;
+    __builtin_memcpy(&fkey.remote_addr, &e.remote_addr, sizeof(fkey.remote_addr));
+    struct flow_metrics *m = bpf_map_lookup_elem(&flow_mtr, &fkey);
+    if (!m) {
+        struct flow_metrics zero = {};
+        bpf_map_update_elem(&flow_mtr, &fkey, &zero, BPF_NOEXIST);
+    }
+
     bpf_ringbuf_output(&events, &e, sizeof(e), 0);
     return 0;
+}
+
+/*
+
+struct __sk_buff {
+    __u32 len;              Длина пакета
+    __u32 pkt_type;         Тип пакета (например, PACKET_HOST, PACKET_BROADCAST)
+    __u32 mark;             /* Метка пакета (skb->mark), можно читать и писать
+    __u32 queue_mapping;    /* Очередь сетевой карты *
+    __u32 protocol;         /* Протокол пакета (например, ETH_P_IP) в сетевом порядке байт *
+    __u32 vlan_present;     /* Присутствует ли VLAN-тег *
+    __u32 vlan_tci;         /* VLAN Tag Control Information *
+    __u32 vlan_proto;       /* Протокол VLAN encapsulation *
+    __u32 priority;         /* Приоритет для QoS/дисков *
+    __u32 ingress_ifindex;  /* Индекс входящего сетевого интерфейса *
+    __u32 ifindex;          /* Текущий индекс сетевого интерфейса *
+    __u32 tc_index;         /* Индекс классификатора трафика (Traffic Control) *
+    __u32 cb[5];            /* Control Buffer: 20 байт для хранения кастомных данных между eBPF-программами *
+    __u32 hash;             /* Хэш пакета, вычисленный сетевой картой или ядром *
+    __u32 tc_classid;       /* Идентификатор класса Traffic Control *
+    __u32 data;             /* Указатель на начало данных пакета (полинейная часть) *
+    __u32 data_end;         /* Указатель на конец данных пакета *
+    __u32 napi_id;          /* Идентификатор NAPI-контекста *
+
+    /* Доступно в более новых версиях ядра Linux *
+    __u32 family;           /* Семейство протоколов (AF_INET / AF_INET6) *
+    __u32 remote_ip4;       /* Удаленный IPv4-адрес (для BPF_PROG_TYPE_CGROUP_SKB) *
+    __u32 local_ip4;        /* Локальный IPv4-адрес *
+    __u32 remote_ip6[4];    /* Удаленный IPv6-адрес *
+    __u32 local_ip6[4];     /* Локальный IPv6-адрес *
+    __u32 remote_port;      /* Удаленный порт (в сетевом порядке байт) *
+    __u32 local_port;       /* Локальный порт *
+    __u32 data_meta;        /* Указатель на метаданные перед началом пакета (для связи XDP -> TC) *
+
+    struct bpf_flow_keys *flow_keys; /* Выделенные ключи потока (информация о L3/L4) *
+    __u64 tstamp;           /* Временная метка пакета (ktime) *
+    __u32 wire_len;         /* Длина пакета "на проводе" (включая обрезанные L2-данные) *
+    __u32 gso_segs;         /* Количество сегментов при GSO (Generic Segmentation Offload) *
+    struct bpf_sock *sk;    /* Указатель на связанный сокет (если он есть) *
+    __u32 gso_size;         /* Размер сегмента GSO *
+    __u8  tstamp_type;      /* Тип временной метки *
+    __u8  hwtstamp;         /* Аппаратная временная метка
+};
+
+*/
+
+static int traffic_analyze(struct __sk_buff *skb, bool tx_rx) {
+    struct flow_key fkey = {};
+    __u16 eth_proto = bpf_ntohs((__u16)skb->protocol);
+
+    if (eth_proto == ETH_P_IP) {
+        struct iphdr ip4 = {};
+        if (bpf_skb_load_bytes_relative(skb, 0, &ip4, sizeof(ip4), BPF_HDR_START_NET) < 0) {
+            return TCX_NEXT;
+        }
+
+        fkey.family = AF_INET;
+
+        if (tx_rx) {
+            __builtin_memcpy(&fkey.remote_addr, &ip4.daddr, sizeof(ip4.daddr));
+        } else {
+            __builtin_memcpy(&fkey.remote_addr, &ip4.saddr, sizeof(ip4.saddr));
+        }
+    } else if (eth_proto == ETH_P_IPV6) {
+        struct ipv6hdr ip6 = {};
+        if (bpf_skb_load_bytes_relative(skb, 0, &ip6, sizeof(ip6), BPF_HDR_START_NET) < 0) {
+            return TCX_NEXT;
+        }
+
+        fkey.family = AF_INET6;
+
+        if (tx_rx) {
+            __builtin_memcpy(&fkey.remote_addr, &ip6.daddr, sizeof(ip6.daddr));
+        } else {
+            __builtin_memcpy(&fkey.remote_addr, &ip6.saddr, sizeof(ip6.saddr));
+        }
+    } else {
+        return TCX_NEXT;
+    }
+
+    struct flow_metrics *m = bpf_map_lookup_elem(&flow_mtr, &fkey);
+
+    if (!m) {
+        return TCX_NEXT;
+    }
+
+    __u64 len = skb->len;
+
+    if (tx_rx) {
+        __sync_fetch_and_add(&m->tx_bytes, len);
+        __sync_fetch_and_add(&m->tx_packets, 1);
+    } else {
+        __sync_fetch_and_add(&m->rx_bytes, len);
+        __sync_fetch_and_add(&m->rx_packets, 1);
+    }
+
+    return TCX_NEXT;
+}
+
+SEC("tcx/egress")
+int handle_egress(struct __sk_buff *skb) {
+    return traffic_analyze(skb, true);
+}
+
+SEC("tcx/ingress")
+int handle_ingress(struct __sk_buff *skb) {
+    return traffic_analyze(skb, false);
 }

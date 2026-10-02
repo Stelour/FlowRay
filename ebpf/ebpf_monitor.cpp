@@ -19,6 +19,15 @@
 #include <bpf/bpf.h>
 #include <chrono>
 #include <unordered_set>
+#include <net/if.h>
+
+struct tcx_links {
+    unsigned int ifindex = 0;
+    std::string ifname;
+
+    bpf_link* ingress = nullptr;
+    bpf_link* egress = nullptr;
+};
 
 static volatile sig_atomic_t exiting = 0;
 
@@ -181,6 +190,69 @@ static int update_proc(struct ebpf_connect_bpf* skel, std::unordered_set<std::ui
     return 0;
 }
 
+static int attach_tcx_interfaces(struct ebpf_connect_bpf* skel, std::vector<tcx_links>& attached) {
+    struct if_nameindex* ifs = if_nameindex();
+
+    if (!ifs) {
+        std::cerr << "Failed to get network interfaces" << std::endl;
+        return 1;
+    }
+
+    for (struct if_nameindex* it = ifs; it->if_index != 0 && it->if_name != nullptr; ++it) {
+        bpf_tcx_opts opts{};
+        opts.sz = sizeof(opts);
+
+        tcx_links links{};
+        links.ifindex = it->if_index;
+        links.ifname = it->if_name;
+
+        links.ingress = bpf_program__attach_tcx(skel->progs.handle_ingress, it->if_index, &opts);
+
+        if (!links.ingress) {
+            std::cerr << "Failed to attach TCX ingress to " << it->if_name << std::endl;
+            continue;
+        }
+
+        links.egress = bpf_program__attach_tcx(skel->progs.handle_egress, it->if_index, &opts);
+
+        if (!links.egress) {
+            std::cerr << "Failed to attach TCX egress to " << it->if_name << std::endl;
+            bpf_link__destroy(links.ingress);
+            continue;
+        }
+
+        std::cout << "TCX attached: " << it->if_name << " (ifindex " << it->if_index << ")\n";
+        attached.push_back(std::move(links));
+    }
+    if_freenameindex(ifs);
+    return attached.empty() ? 1 : 0;
+}
+
+static void print_flow_metrics(struct ebpf_connect_bpf* skel) {
+    int map_fd = bpf_map__fd(skel->maps.flow_mtr);
+
+    flow_key current_key{};
+    flow_key next_key{};
+
+    const flow_key* current = nullptr;
+
+    while (bpf_map_get_next_key(map_fd, current, &next_key) == 0) {
+        flow_metrics metrics{};
+
+        if (bpf_map_lookup_elem(map_fd, &next_key, &metrics) == 0) {
+            char remote_ip[INET6_ADDRSTRLEN]{};
+            const void* addr = next_key.remote_addr;
+            if (inet_ntop(next_key.family, addr, remote_ip, sizeof(remote_ip))) {
+                std::cout << "TRAFFIC " << remote_ip << " | RX: " << metrics.rx_bytes
+                    << " bytes / " << metrics.rx_packets << " packets | TX: " << metrics.tx_bytes
+                    << " bytes / " << metrics.tx_packets << " packets" << std::endl;
+            }
+        }
+        current_key = next_key;
+        current = &current_key;
+    }
+}
+
 int ebpf_start(const std::vector<std::uint32_t>& pids, const std::string& proc_name, bool pid_tree) {
     std::signal(SIGINT, handle_signal);
     std::signal(SIGTERM, handle_signal);
@@ -211,6 +283,9 @@ int ebpf_start(const std::vector<std::uint32_t>& pids, const std::string& proc_n
         return 1;
     }
 
+    bpf_program__set_autoattach(skel->progs.handle_ingress, false);
+    bpf_program__set_autoattach(skel->progs.handle_egress, false);
+
     err = ebpf_connect_bpf__load(skel);
     if (err) {
         std::cerr << "Failed to load BPF skeleton: " << err << std::endl;
@@ -222,6 +297,16 @@ int ebpf_start(const std::vector<std::uint32_t>& pids, const std::string& proc_n
 
     if (err) {
         std::cerr << "Failed to attach BPF skeleton: " << err << std::endl;
+        ebpf_connect_bpf__destroy(skel);
+        return 1;
+    }
+
+    std::vector<tcx_links> tcx_attached;
+
+    err = attach_tcx_interfaces(skel, tcx_attached);
+
+    if (err) {
+        std::cerr << "Failed to attach TCX to network interfaces" << std::endl;
         ebpf_connect_bpf__destroy(skel);
         return 1;
     }
@@ -263,11 +348,25 @@ int ebpf_start(const std::vector<std::uint32_t>& pids, const std::string& proc_n
 
         if (now - last_scan > std::chrono::seconds(1)) {
             err = update_proc(skel, tracked_pids, pid_tree, proc_name);
+            std::cout << "\n--- Traffic ---\n";
+            print_flow_metrics(skel);
+            std::cout << "---------------\n\n";
             last_scan = now;
         }
     }
 
     ring_buffer__free(rb);
+
+    for (auto& links : tcx_attached) {
+        if (links.ingress) {
+            bpf_link__destroy(links.ingress);
+        }
+
+        if (links.egress) {
+            bpf_link__destroy(links.egress);
+        }
+    }
+
     ebpf_connect_bpf__destroy(skel);
 
     return 0;
