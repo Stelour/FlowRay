@@ -7,6 +7,7 @@
 #include <fstream>
 #include <cctype>
 #include <iostream>
+// #include <algorithm>
 
 static bool is_number(const std::string& s) {
     if (s.empty()) return false;
@@ -14,6 +15,13 @@ static bool is_number(const std::string& s) {
         if (!std::isdigit(c)) return false;
     }
     return true;
+}
+
+std::string to_lower(std::string data) {
+    std::transform(data.begin(), data.end(), data.begin(), [](unsigned char c) {
+        return std::tolower(c);
+    });
+    return data;
 }
 
 std::vector<std::uint32_t> find_pids_by_name(const std::string& proc_name) {
@@ -29,7 +37,7 @@ std::vector<std::uint32_t> find_pids_by_name(const std::string& proc_name) {
 
                 std::string process_name;
                 std::getline(file_pid_comm, process_name);
-                if (process_name == proc_name) {
+                if (to_lower(process_name).find(to_lower(proc_name)) != std::string::npos) {
                     proc_pids.push_back(static_cast<uint32_t>(std::stoul(folder_name)));
                 }
             }
