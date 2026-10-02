@@ -48,6 +48,39 @@ struct {
     __type(value, __u8);
 } allowed_pids SEC(".maps");
 
+static __always_inline int parse_user_sockaddr(void *addr, struct event *e) {
+    if (!addr) {
+        return -1;
+    }
+
+    __u16 family = 0;
+    if (bpf_probe_read_user(&family, sizeof(family), addr) < 0) {
+        return -1;
+    }
+
+    if (family != AF_INET && family != AF_INET6) {
+        return -1;
+    }
+
+    e->family = family;
+
+    if (family == AF_INET) {
+        struct sockaddr_in addr4 = {};
+        if (bpf_probe_read_user(&addr4, sizeof(addr4), addr) < 0)
+            return -1;
+        __builtin_memcpy(e->remote_addr, &addr4.sin_addr, sizeof(addr4.sin_addr));
+        e->remote_port = bpf_ntohs(addr4.sin_port);
+    } else {
+        struct sockaddr_in6 addr6 = {};
+        if (bpf_probe_read_user(&addr6, sizeof(addr6), addr) < 0)
+            return -1;
+        __builtin_memcpy(e->remote_addr, &addr6.sin6_addr, sizeof(addr6.sin6_addr));
+        e->remote_port = bpf_ntohs(addr6.sin6_port);
+    }
+
+    return 0;
+}
+
 SEC("tp/syscalls/sys_enter_connect")
 int handle_connect(struct trace_event_raw_sys_enter *ctx) {
     __u64 id = bpf_get_current_pid_tgid();
@@ -62,70 +95,30 @@ int handle_connect(struct trace_event_raw_sys_enter *ctx) {
     void *addr = (void *)ctx->args[1];
     // int addrlen = (int)ctx->args[2];
 
-    __u16 family = 0;
-
-    struct event e = {};
-
     if (!addr) {
         return 0;
     }
 
-    if (bpf_probe_read_user(&family, sizeof(family), addr) < 0) {
+    struct event e = {};
+
+    if (parse_user_sockaddr(addr, &e) < 0) {
         return 0;
     }
-
-    if (family != AF_INET && family != AF_INET6) {
-        return 0;
-    }
-
-    // e = (struct event *)bpf_ringbuf_reserve(&events,sizeof(*e),0);
-
-    // if (!e) {
-    //     return 0;
-    // }
 
     e.pid = pid;
     e.tid = tid;
     e.fd = fd;
-    e.family = family;
 
     bpf_get_current_comm(e.comm, sizeof(e.comm));
 
-    if (family == AF_INET) {
-        struct sockaddr_in addr4 = {};
-
-        if (bpf_probe_read_user(&addr4,sizeof(addr4), addr) < 0) {
-            // bpf_ringbuf_discard(e, 0);
-            return 0;
-        }
-
-        // __builtin_memset(e, 0, sizeof(*e));
-        __builtin_memcpy(e.remote_addr, &addr4.sin_addr, sizeof(addr4.sin_addr));
-        e.remote_port = bpf_ntohs(addr4.sin_port);
-    } else if (family == AF_INET6) {
-        struct sockaddr_in6 addr6 = {};
-
-        if (bpf_probe_read_user(&addr6, sizeof(addr6), addr) < 0) {
-            // bpf_ringbuf_discard(e, 0);
-            return 0;
-        }
-
-        __builtin_memcpy(e.remote_addr, &addr6.sin6_addr, sizeof(addr6.sin6_addr));
-        e.remote_port = bpf_ntohs(addr6.sin6_port);
-    }
-    // bpf_ringbuf_submit(e, 0);
-
     __u64 key = ((__u64)pid << 32) | (__u32)fd;
-
     struct socket_info *info = bpf_map_lookup_elem(&sockets, &key);
-
     if (info) {
         e.type = info->type;
         e.protocol = info->protocol;
     }
 
-    bpf_map_update_elem(&pending_connects,  &id, &e,  BPF_ANY);
-
+    bpf_map_update_elem(&pending_connects, &id, &e, BPF_ANY);
     return 0;
 }
 
@@ -161,12 +154,27 @@ struct tracepoint__syscalls__sys_enter_socket {
 SEC("tp/syscalls/sys_enter_socket")
 int handle_enter_socket(struct trace_event_raw_sys_enter *ctx) {
     __u64 id = bpf_get_current_pid_tgid();
+    __u32 pid = id >> 32;
+
+    if (!bpf_map_lookup_elem(&allowed_pids, &pid)) {
+        return 0;
+    }
 
     struct socket_info info = {};
 
     info.family = ctx->args[0];
     info.type = ctx->args[1];
     info.protocol = ctx->args[2];
+
+    int base_type = info.type & 0xf;
+
+    if (info.protocol == 0) {
+        if (base_type == SOCK_STREAM) {
+            info.protocol = IPPROTO_TCP; // 6
+        } else if (base_type == SOCK_DGRAM) {
+            info.protocol = IPPROTO_UDP; // 17
+        }
+    }
 
     bpf_map_update_elem(&tmp_sockets, &id, &info, BPF_ANY);
 
@@ -226,4 +234,44 @@ int handle_close(struct trace_event_raw_sys_enter *ctx) {
     __u64 key = ((__u64)pid << 32) | (__u32)fd;
 
     bpf_map_delete_elem(&sockets, &key);
+    return 0;
+}
+
+SEC("tp/syscalls/sys_enter_sendto")
+int handle_enter_sendto(struct trace_event_raw_sys_enter *ctx) {
+    void *addr = (void *)ctx->args[4];
+    if (!addr) {
+        return 0;
+    }
+
+    __u64 id = bpf_get_current_pid_tgid();
+    __u32 pid = id >> 32;
+
+    if (!bpf_map_lookup_elem(&allowed_pids, &pid)) {
+        return 0;
+    }
+
+    int fd = (int)ctx->args[0];
+    __u64 key = ((__u64)pid << 32) | (__u32)fd;
+    struct socket_info *info = bpf_map_lookup_elem(&sockets, &key);
+
+    if (!info || info->protocol != IPPROTO_UDP) {
+        return 0;
+    }
+
+    struct event e = {};
+    if (parse_user_sockaddr(addr, &e) < 0) {
+        return 0;
+    }
+
+    e.pid = pid;
+    e.tid = (__u32)id;
+    e.fd = fd;
+    e.type = info->type;
+    e.protocol = IPPROTO_UDP;
+    e.result = 0;
+    bpf_get_current_comm(e.comm, sizeof(e.comm));
+
+    bpf_ringbuf_output(&events, &e, sizeof(e), 0);
+    return 0;
 }

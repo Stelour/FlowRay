@@ -51,16 +51,10 @@ static int handle_event(void *ctx, void *data, size_t data_sz) {
         return 0;
     }
 
-    int base_type = e->type & 0xF;
     std::string prt;
-
     if (e->protocol == IPPROTO_TCP) {
         prt = "TCP";
     } else if (e->protocol == IPPROTO_UDP) {
-        prt = "UDP";
-    } else if (e->protocol == 0 && base_type == SOCK_STREAM) {
-        prt = "TCP";
-    } else if (e->protocol == 0 && base_type == SOCK_DGRAM) {
         prt = "UDP";
     } else {
         prt = "UNKNOWN";
