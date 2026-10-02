@@ -152,6 +152,7 @@ int handle_connect_exit(struct trace_event_raw_sys_exit *ctx) {
     if (pend->result == 0 || pend->result == -115) {
         struct flow_key fkey = {};
         fkey.family = pend->family;
+        fkey.remote_port = pend->remote_port;
         __builtin_memcpy(&fkey.remote_addr, &pend->remote_addr, sizeof(fkey.remote_addr));
         struct flow_metrics *m = bpf_map_lookup_elem(&flow_mtr, &fkey);
         if (!m) {
@@ -303,6 +304,7 @@ int handle_enter_sendto(struct trace_event_raw_sys_enter *ctx) {
 
     struct flow_key fkey = {};
     fkey.family = e.family;
+    fkey.remote_port = e.remote_port;
     __builtin_memcpy(&fkey.remote_addr, &e.remote_addr, sizeof(fkey.remote_addr));
     struct flow_metrics *m = bpf_map_lookup_elem(&flow_mtr, &fkey);
     if (!m) {
@@ -361,32 +363,54 @@ struct __sk_buff {
 static int traffic_analyze(struct __sk_buff *skb, bool tx_rx) {
     struct flow_key fkey = {};
     __u16 eth_proto = bpf_ntohs((__u16)skb->protocol);
+    struct read_port {
+        __u16 sport;
+        __u16 dport;
+    };
 
     if (eth_proto == ETH_P_IP) {
         struct iphdr ip4 = {};
+        struct read_port ports;
         if (bpf_skb_load_bytes_relative(skb, 0, &ip4, sizeof(ip4), BPF_HDR_START_NET) < 0) {
             return TCX_NEXT;
         }
 
         fkey.family = AF_INET;
 
+        int ret = bpf_skb_load_bytes_relative(skb, sizeof(struct iphdr), &ports, sizeof(ports), BPF_HDR_START_NET);
+        
+        if (ret != 0) {
+            return TCX_NEXT;
+        }
+
         if (tx_rx) {
             __builtin_memcpy(&fkey.remote_addr, &ip4.daddr, sizeof(ip4.daddr));
+            fkey.remote_port = bpf_ntohs(ports.dport);
         } else {
             __builtin_memcpy(&fkey.remote_addr, &ip4.saddr, sizeof(ip4.saddr));
+            fkey.remote_port = bpf_ntohs(ports.sport);
         }
     } else if (eth_proto == ETH_P_IPV6) {
         struct ipv6hdr ip6 = {};
+        struct read_port ports;
         if (bpf_skb_load_bytes_relative(skb, 0, &ip6, sizeof(ip6), BPF_HDR_START_NET) < 0) {
             return TCX_NEXT;
         }
 
         fkey.family = AF_INET6;
 
+        int ret = bpf_skb_load_bytes_relative(skb, sizeof(struct ipv6hdr), &ports, sizeof(ports), BPF_HDR_START_NET);
+
+        if (ret != 0) {
+            return TCX_NEXT;
+        }
+
         if (tx_rx) {
             __builtin_memcpy(&fkey.remote_addr, &ip6.daddr, sizeof(ip6.daddr));
+            fkey.remote_port = bpf_ntohs(ports.dport);
         } else {
             __builtin_memcpy(&fkey.remote_addr, &ip6.saddr, sizeof(ip6.saddr));
+            fkey.remote_port = bpf_ntohs(ports.sport);
         }
     } else {
         return TCX_NEXT;

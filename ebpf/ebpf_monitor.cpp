@@ -220,12 +220,10 @@ static int attach_tcx_interfaces(struct ebpf_connect_bpf* skel, std::vector<tcx_
             bpf_link__destroy(links.ingress);
             continue;
         }
-
-        std::cout << "TCX attached: " << it->if_name << " (ifindex " << it->if_index << ")\n";
         attached.push_back(std::move(links));
     }
     if_freenameindex(ifs);
-    return attached.empty() ? 1 : 0;
+    return attached.empty();
 }
 
 static void print_flow_metrics(struct ebpf_connect_bpf* skel) {
@@ -241,9 +239,9 @@ static void print_flow_metrics(struct ebpf_connect_bpf* skel) {
 
         if (bpf_map_lookup_elem(map_fd, &next_key, &metrics) == 0) {
             char remote_ip[INET6_ADDRSTRLEN]{};
-            const void* addr = next_key.remote_addr;
+            const auto* addr = next_key.remote_addr;
             if (inet_ntop(next_key.family, addr, remote_ip, sizeof(remote_ip))) {
-                std::cout << "TRAFFIC " << remote_ip << " | RX: " << metrics.rx_bytes
+                std::cout << "TRAFFIC " << remote_ip << ":" << next_key.remote_port << " | RX: " << metrics.rx_bytes
                     << " bytes / " << metrics.rx_packets << " packets | TX: " << metrics.tx_bytes
                     << " bytes / " << metrics.tx_packets << " packets" << std::endl;
             }
