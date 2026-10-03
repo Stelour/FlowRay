@@ -6,7 +6,7 @@
 #include <iostream>
 
 /*
-TODO: output with ncurses for --live; flag --ring-bufer-size; flag --socket; dns request; for readme will add a min linux kernel ver and system packets
+TODO: output with ncurses for --live; flag --ring-bufer-size; flag --socket; dns request;
 */
 
 int main(int argc, char* argv[]) {
