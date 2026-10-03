@@ -23,6 +23,13 @@ struct DiagQuery {
     std::uint8_t protocol{};
 };
 
+struct SocketFdRef {
+    std::uint32_t pid;
+    int fd;
+};
+
+using SocketFdMap = std::unordered_map<std::uint32_t, std::vector<SocketFdRef>>;
+
 struct SocketInfo {
     std::uint8_t family{};
     std::uint8_t protocol{};

@@ -20,6 +20,7 @@
 #include <chrono>
 #include <unordered_set>
 #include <net/if.h>
+#include <unordered_map>
 
 struct tcx_links {
     unsigned int ifindex = 0;
@@ -190,6 +191,68 @@ static int update_proc(struct ebpf_connect_bpf* skel, std::unordered_set<std::ui
     return 0;
 }
 
+static int seed_ex(struct ebpf_connect_bpf* skel, const std::vector<std::uint32_t>& pids, bool pid_tree) {
+    std::vector<ProcessInfo> processes;
+    std::vector<SocketInfo> sockets;
+    SocketFdMap socket_fds;
+    if (get_proc_sockets(pids, pid_tree, processes, sockets, &socket_fds) != status_msg::success) {
+        std::cerr << "Failed to scan existing sockets" << std::endl;
+        return -1;
+    }
+    int flow_map_fd = bpf_map__fd(skel->maps.flow_mtr);
+    int socket_map_fd = bpf_map__fd(skel->maps.sockets);
+    for (const auto& sock : sockets) {
+        auto fd_it = socket_fds.find(sock.inode);
+        if (fd_it != socket_fds.end()) {
+            struct socket_info info{};
+            info.family = sock.family;
+            info.protocol = sock.protocol;
+            if (sock.protocol == IPPROTO_TCP) {
+                info.type = SOCK_STREAM;
+            }
+            else if (sock.protocol == IPPROTO_UDP) {
+                info.type = SOCK_DGRAM;
+            }
+            else {
+                continue;
+            }
+            for (const auto& ref : fd_it->second) {
+                std::uint64_t key = (static_cast<std::uint64_t>(ref.pid) << 32) | static_cast<std::uint32_t>(ref.fd);
+                if (bpf_map_update_elem(socket_map_fd, &key, &info, BPF_ANY) != 0) {
+                    std::cerr << "Failed to seed socket " << "pid=" << ref.pid
+                    << " fd=" << ref.fd << ": " << strerror(errno) << std::endl;
+                }
+            }
+        }
+
+        if (sock.family != AF_INET && sock.family != AF_INET6) {
+            continue;
+        }
+
+        if (sock.remote_port == 0) {
+            continue;
+        }
+
+        struct flow_key key{};
+        key.family = sock.family;
+        key.remote_port = sock.remote_port;
+
+        if (inet_pton(sock.family, sock.remote_ip.c_str(), key.remote_addr) != 1) {
+            continue;
+        }
+
+        struct flow_metrics zero{};
+
+        if (bpf_map_update_elem(flow_map_fd, &key, &zero, BPF_NOEXIST) != 0) {
+            if (errno != EEXIST) {
+                std::cerr << "Failed to seed flow " << sock.remote_ip << ":" << sock.remote_port << std::endl;
+            }
+        }
+    }
+
+    return 0;
+}
+
 static int attach_tcx_interfaces(struct ebpf_connect_bpf* skel, std::vector<tcx_links>& attached) {
     struct if_nameindex* ifs = if_nameindex();
 
@@ -291,10 +354,27 @@ int ebpf_start(const std::vector<std::uint32_t>& pids, const std::string& proc_n
         return 1;
     }
 
+    std::unordered_set<std::uint32_t> tracked_pids;
+    std::uint8_t value = 1;
+    for (auto pid : procs_pid) {
+        int err = bpf_map_update_elem(bpf_map__fd(skel->maps.allowed_pids), &pid, &value, BPF_ANY);
+        if (err) {
+            std::cerr << "Failed to update element for PID: " << pid << std::endl;
+        } else {
+            tracked_pids.insert(pid);
+        }
+    }
+
     err = ebpf_connect_bpf__attach(skel);
 
     if (err) {
         std::cerr << "Failed to attach BPF skeleton: " << err << std::endl;
+        ebpf_connect_bpf__destroy(skel);
+        return 1;
+    }
+
+    if (seed_ex(skel, procs_pid, pid_tree) != 0) {
+        std::cerr << "Failed to seed ex" << std::endl;
         ebpf_connect_bpf__destroy(skel);
         return 1;
     }
@@ -314,17 +394,6 @@ int ebpf_start(const std::vector<std::uint32_t>& pids, const std::string& proc_n
         std::cerr << "Failed to create ring buffer" << std::endl;
         ebpf_connect_bpf__destroy(skel);
         return 1;
-    }
-
-    std::unordered_set<std::uint32_t> tracked_pids;
-    std::uint8_t value = 1;
-    for (auto pid : procs_pid) {
-        int err = bpf_map_update_elem(bpf_map__fd(skel->maps.allowed_pids), &pid, &value, BPF_ANY);
-        if (err) {
-            std::cerr << "Failed to update element for PID: " << pid << std::endl;
-        } else {
-            tracked_pids.insert(pid);
-        }
     }
 
     std::cout << "FlowRay eBPF monitor started" << std::endl;

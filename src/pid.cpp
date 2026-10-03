@@ -22,7 +22,7 @@ static bool check_pid_is_correct(const std::string& dir_path) {
 static void find_socket_inodes(
     const std::string& dir_path,
     std::unordered_map<std::uint32_t, std::set<std::uint32_t>>& socket_inodes,
-    std::uint32_t proc_pid) {
+    std::uint32_t proc_pid, SocketFdMap* socket_fds = nullptr) {
     try {
         for (const auto& entry : std::filesystem::directory_iterator(dir_path + "/fd")) {
             std::error_code ec;
@@ -31,11 +31,20 @@ static void find_socket_inodes(
                 continue;
             }
             if (cur_fd.starts_with("socket:[")) {
+                std::uint32_t ind = std::stoul(cur_fd.substr(cur_fd.find('[') + 1, cur_fd.find(']') - cur_fd.find('[') - 1));
                 // socket_inodes.insert(std::stoul(
                 //     cur_fd.substr(cur_fd.find('[') + 1, cur_fd.find(']') - cur_fd.find('[') - 1)));
-                socket_inodes[
-                    std::stoul(cur_fd.substr(cur_fd.find('[') + 1, cur_fd.find(']') - cur_fd.find('[') - 1))
-                    ].insert(proc_pid);
+                socket_inodes[ind].insert(proc_pid);
+                if (socket_fds) {
+                    int fd;
+                    try {
+                        fd = std::stoi(entry.path().filename().string());
+                    }
+                    catch (...) {
+                        continue;
+                    }
+                    (*socket_fds)[ind].push_back({.pid = proc_pid,.fd = fd});
+                }
             }
         }
     } catch(const std::filesystem::filesystem_error&) {
@@ -43,11 +52,11 @@ static void find_socket_inodes(
     }
 }
 
-status_msg get_proс_sockets(
+status_msg get_proc_sockets(
     const std::vector<uint32_t>& pids,
     bool pid_tree,
     std::vector<ProcessInfo>& processes,
-    std::vector<SocketInfo>& sockets
+    std::vector<SocketInfo>& sockets, SocketFdMap* socket_fds = nullptr
     ) {
     processes.clear();
     sockets.clear();
@@ -75,7 +84,7 @@ status_msg get_proс_sockets(
     // std::unordered_set<std::uint32_t> socket_inodes = {};
     std::unordered_map<std::uint32_t, std::set<std::uint32_t>> socket_inodes;
     for (auto& proc_pid : procs_pid) {
-        find_socket_inodes("/proc/" + std::to_string(proc_pid), socket_inodes, proc_pid);
+        find_socket_inodes("/proc/" + std::to_string(proc_pid), socket_inodes, proc_pid, socket_fds);
     }
 
     for (auto pid : procs_pid) {
@@ -153,7 +162,7 @@ static status_msg start_live_mode(
         std::vector<ProcessInfo> new_processes;
         std::vector<SocketInfo> new_sockets;
 
-        if (get_proс_sockets(pids, pid_tree, new_processes, new_sockets) != status_msg::success) {
+        if (get_proc_sockets(pids, pid_tree, new_processes, new_sockets) != status_msg::success) {
             continue;
         }
 
@@ -181,7 +190,7 @@ status_msg start_pid(const std::vector<std::uint32_t>& pids, bool pid_tree, bool
 
     std::vector<ProcessInfo> processes;
     std::vector<SocketInfo> sockets;
-    if (get_proс_sockets(pids, pid_tree, processes, sockets) != status_msg::success) {
+    if (get_proc_sockets(pids, pid_tree, processes, sockets) != status_msg::success) {
         std::cerr << "ERROR: failed to get proc_sockets" << std::endl;
         return status_msg::error;
     }
