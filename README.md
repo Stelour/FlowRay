@@ -18,6 +18,11 @@ cmake --build build
 ./build/flowray --help
 ```
 
+Also download after packets _(example for arch linux)_:
+```
+sudo pacman -S bpf cmake
+```
+
 ## Example
 
 Analyze Discord network activity:
